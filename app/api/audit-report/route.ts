@@ -2,11 +2,6 @@ import { getGeminiModel } from "@/lib/gemini";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 export async function POST(req: Request) {
     try {
         const { files, cardId } = await req.json();
@@ -14,6 +9,12 @@ export async function POST(req: Request) {
         if (!files || files.length === 0) {
             return NextResponse.json({ error: "No files provided" }, { status: 400 });
         }
+
+        // Lazy init Supabase to avoid build-time crashes if envs are missing in Vercel build context
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
 
         // Using gemini-2.0-flash for Audit (Multi-modal)
         // Lazy load model inside handler to avoid build-time errors

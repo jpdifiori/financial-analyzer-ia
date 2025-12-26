@@ -2,17 +2,17 @@ import { getGeminiModel } from "@/lib/gemini";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-// Initialize Gemini & Supabase
-// Lazy load Gemini inside handler
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 export async function POST(req: Request) {
     try {
         const { message, context } = await req.json();
         const { goals, tasks } = context || { goals: [], tasks: [] };
+
+        // Initialize Gemini & Supabase
+        // Lazy load inside handler
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
 
         // 1. Construct Contextual Prompt
         // We feed the AI the current state so it can "see" what the user sees.

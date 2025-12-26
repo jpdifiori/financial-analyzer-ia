@@ -13,14 +13,14 @@ import { VariableExpenses } from "@/components/variable-expenses";
 
 import { OverviewDashboard } from "@/components/overview-dashboard";
 import { CardManager } from "@/components/card-manager";
+import { LandingPage } from "@/components/landing-page"; // [NEW]
 
 export default function Home() {
-    // ... existing hooks ...
     const searchParams = useSearchParams();
     const [session, setSession] = useState<any>(null);
     const [authLoading, setAuthLoading] = useState(true);
+    const [showAuth, setShowAuth] = useState(false); // [NEW] To toggle Login form
 
-    // ... useEffects ...
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
@@ -36,7 +36,7 @@ export default function Home() {
         return () => subscription.unsubscribe();
     }, []);
 
-    const [activeTab, setActiveTab] = useState<"dashboard" | "fixed" | "variable" | "card" | "income">("dashboard"); // [UPDATED] 
+    const [activeTab, setActiveTab] = useState<"dashboard" | "fixed" | "variable" | "card" | "income">("dashboard");
 
     const [file, setFile] = useState<File | null>(null);
     const [isPaid, setIsPaid] = useState(false);
@@ -44,14 +44,12 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState(false);
     const [analysisData, setAnalysisData] = useState<any | null>(null);
 
-    // ... handleLogout ...
     const handleLogout = async () => {
         await supabase.auth.signOut();
         localStorage.clear();
         window.location.reload();
     };
 
-    // ... useEffect payment ...
     useEffect(() => {
         const success = searchParams.get("success");
         const session_id = searchParams.get("session_id");
@@ -61,10 +59,8 @@ export default function Home() {
         }
     }, [searchParams]);
 
-    // ... handlers ...
     const handleFileSelect = (selectedFile: File | null) => { setFile(selectedFile); };
 
-    // ... handlePay ...
     const handlePay = async () => {
         if (!file) return;
         try {
@@ -74,7 +70,6 @@ export default function Home() {
         } catch (error) { alert("Error pago"); }
     };
 
-    // ... handleAnalyze ...
     const handleAnalyze = async () => {
         if (!file || !sessionId) { alert("Paga primero"); return; }
         setIsLoading(true);
@@ -93,11 +88,30 @@ export default function Home() {
         } catch (e) { alert("Error"); setIsLoading(false); }
     };
 
-    if (authLoading) return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
-    if (!session) return (<div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4"><AuthForm /></div>);
+    if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400">Cargando experiencia...</div>;
 
+    // [MODIFIED] Logic for unauthenticated users
+    if (!session) {
+        if (showAuth) {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4 animate-in fade-in">
+                    <button
+                        onClick={() => setShowAuth(false)}
+                        className="absolute top-4 left-4 text-sm text-slate-500 hover:text-slate-900"
+                    >
+                        ← Volver al Inicio
+                    </button>
+                    <AuthForm />
+                </div>
+            );
+        }
+        // Default: Show Landing Page
+        return <LandingPage onLoginClick={() => setShowAuth(true)} />;
+    }
+
+    // Authenticated Dashboard
     return (
-        <div className="flex flex-col items-center min-h-[80vh] gap-8 pb-12 relative">
+        <div className="flex flex-col items-center min-h-[80vh] gap-8 pb-12 relative animate-in fade-in">
             <div className="absolute top-4 right-4 flex items-center gap-4">
                 <span className="text-xs text-gray-400">{session.user.email}</span>
                 <button onClick={handleLogout} className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline">

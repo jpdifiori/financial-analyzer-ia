@@ -1,9 +1,9 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getGeminiModel } from "@/lib/gemini";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 // Initialize Gemini & Supabase
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// Lazy load Gemini inside handler
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -48,10 +48,8 @@ export async function POST(req: Request) {
         CRITICAL: Return ONLY valid JSON.
         `;
 
-        // 2. Call Gemini 2.0 Flash (Newest fast model for this Key)
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-        });
+        // 2. Call Gemini (Centralized)
+        const model = getGeminiModel();
 
         const result = await model.generateContent(systemPrompt);
         const responseText = result.response.text();

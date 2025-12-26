@@ -1,4 +1,4 @@
-import { model } from "@/lib/gemini";
+import { getGeminiModel } from "@/lib/gemini";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/lib/db-mock";
 import { NextResponse } from "next/server";
@@ -25,7 +25,6 @@ export async function POST(req: Request) {
     }
 
     // 2. Gemini Analysis
-    // Prepare parts for Gemini
     const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, "");
 
     const prompt = `
@@ -88,6 +87,9 @@ export async function POST(req: Request) {
       - Si hay múltiples tarjetas, toma la principal o la del titular.
       - Normaliza los nombres: "Banco Galicia" -> "Galicia", "Visa Platinum" -> "Visa".
     `;
+
+    // Lazy load model
+    const model = getGeminiModel();
 
     const result = await model.generateContent([
       prompt,

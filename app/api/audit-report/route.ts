@@ -1,8 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getGeminiModel } from "@/lib/gemini";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -17,9 +16,8 @@ export async function POST(req: Request) {
         }
 
         // Using gemini-2.0-flash for Audit (Multi-modal)
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-        });
+        // Lazy load model inside handler to avoid build-time errors
+        const model = getGeminiModel();
 
         const prompt = `
         Actúa como el Consultor Financiero de Inteligencia Artificial más avanzado del mundo.

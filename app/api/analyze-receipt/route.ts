@@ -1,4 +1,4 @@
-import { model } from "@/lib/gemini";
+import { getGeminiModel } from "@/lib/gemini";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/lib/db-mock";
 import { NextResponse } from "next/server";
@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     `;
 
         // 4. Call Gemini
+        const model = getGeminiModel();
         const result = await model.generateContent([
             prompt,
             {

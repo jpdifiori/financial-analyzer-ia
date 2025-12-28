@@ -23,7 +23,8 @@ export function OverviewDashboard() {
             fixed: 0,
             variable: 0,
             cards: 0
-        }
+        },
+        ageOfMoney: 0
     });
     const [cards, setCards] = useState<any[]>([]);
     const [selectedCard, setSelectedCard] = useState<string>("all");
@@ -136,13 +137,20 @@ export function OverviewDashboard() {
                     trends.variable = calcTrend(curr.variable_total, prev.variable_total);
                 }
 
+                // --- 5. Age of Money Logic ---
+                const totalSpending6Months = enrichedChartData.reduce((sum, m) => sum + m.fixed_total + m.variable_total, 0);
+                const avgDailySpend = totalSpending6Months / (6 * 30); // Approx 180 days
+                const balance = (currentData?.income || 0) - (totalFixed + (currentData?.variable_total || 0));
+                const ageOfMoney = avgDailySpend > 0 ? balance / avgDailySpend : 0;
+
                 setMetrics({
                     income: currentData?.income || 0,
                     fixed: totalFixed,
                     variable: allVariable?.filter(v => v.date.startsWith(selectedMonth)).reduce((s, i) => s + Number(i.amount), 0) || 0,
                     cards: currentAnalyses.reduce((sum, a) => sum + (a.summary?.total_pay || 0), 0),
-                    balance: (currentData?.income || 0) - (totalFixed + (currentData?.variable_total || 0)),
-                    trends
+                    balance: balance,
+                    trends,
+                    ageOfMoney: Math.max(0, Math.floor(ageOfMoney))
                 });
 
                 // This line was missing from the original code, assuming it should filter analyses for the current month
@@ -235,7 +243,7 @@ export function OverviewDashboard() {
                     )}
 
                     {/* Header Metrics */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                         <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-sm font-medium text-slate-500 flex items-center justify-between">
@@ -292,6 +300,18 @@ export function OverviewDashboard() {
                             <CardContent>
                                 <div className="text-2xl font-bold text-slate-900">${metrics.cards.toLocaleString()}</div>
                                 <p className="text-xs text-slate-400 mt-1">{selectedMonth}</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-indigo-900 border-indigo-800 shadow-lg shadow-indigo-900/20 text-white lg:col-span-1">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-bold text-indigo-300 uppercase flex items-center gap-2">
+                                    <TrendingUp className="h-3 w-3" /> Edad del Dinero
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-3xl font-black text-white">{metrics.ageOfMoney} <span className="text-sm font-normal text-indigo-300">días</span></div>
+                                <p className="text-[10px] text-indigo-400 mt-1">Capacidad de sustento actual</p>
                             </CardContent>
                         </Card>
                     </div>

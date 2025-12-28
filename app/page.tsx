@@ -11,10 +11,13 @@ import { IncomeTracker } from "@/components/income-tracker";
 import { FixedExpenses } from "@/components/fixed-expenses";
 import { VariableExpenses } from "@/components/variable-expenses";
 
+import { BudgetManager } from "@/components/budget-manager";
+import { SavingsGoals } from "@/components/savings-goals";
+import { NetWorthChart } from "@/components/net-worth-chart";
+import { PartnerManager } from "@/components/partner-manager";
 import { OverviewDashboard } from "@/components/overview-dashboard";
 import { CardManager } from "@/components/card-manager";
 import { LandingPage } from "@/components/landing-page";
-import { BudgetManager } from "@/components/budget-manager";
 
 export default function Home() {
     const searchParams = useSearchParams();
@@ -37,7 +40,7 @@ export default function Home() {
         return () => subscription.unsubscribe();
     }, []);
 
-    const [activeTab, setActiveTab] = useState<"dashboard" | "fixed" | "variable" | "card" | "income" | "budget">("dashboard");
+    const [activeTab, setActiveTab] = useState<"dashboard" | "fixed" | "variable" | "card" | "income" | "budget" | "goals" | "networth" | "partner">("dashboard");
 
     const [file, setFile] = useState<File | null>(null);
     const [isPaid, setIsPaid] = useState(false);
@@ -167,6 +170,24 @@ export default function Home() {
                 >
                     🎯 Presupuestos
                 </button>
+                <button
+                    onClick={() => setActiveTab("goals")}
+                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "goals" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    🚀 Metas
+                </button>
+                <button
+                    onClick={() => setActiveTab("networth")}
+                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "networth" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    📈 Patrimonio
+                </button>
+                <button
+                    onClick={() => setActiveTab("partner")}
+                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "partner" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    👥 Socios
+                </button>
                 <a
                     href="/audit"
                     className="px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all text-orange-600 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-1"
@@ -187,6 +208,9 @@ export default function Home() {
                 {activeTab === "variable" && <VariableExpenses />}
                 {activeTab === "income" && <IncomeTracker />}
                 {activeTab === "budget" && <BudgetManager selectedMonth={new Date().toISOString().slice(0, 7)} />}
+                {activeTab === "goals" && <SavingsGoals />}
+                {activeTab === "networth" && <NetWorthChart />}
+                {activeTab === "partner" && <PartnerManager />}
                 {activeTab === "card" && (
                     <CardManager
                         file={file}

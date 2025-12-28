@@ -36,18 +36,25 @@ export function NetWorthChart() {
                 { data: allIncomes },
                 { data: fixedExp },
                 { data: allVariable },
-                { data: allAnalyses }
+                { data: allAnalyses },
+                { data: dbAssets },
+                { data: dbLiabilities }
             ] = await Promise.all([
                 supabase.from("incomes").select("*").eq("user_id", user.id),
                 supabase.from("fixed_expenses").select("*").eq("user_id", user.id),
                 supabase.from("variable_expenses").select("*").eq("user_id", user.id).gte("date", `${historyMonths[0]}-01`),
-                supabase.from("analyses").select("*").eq("user_id", user.id).gte("summary->>period", historyMonths[0])
+                supabase.from("analyses").select("*").eq("user_id", user.id).gte("summary->>period", historyMonths[0]),
+                supabase.from("assets").select("*").eq("user_id", user.id),
+                supabase.from("liabilities").select("*").eq("user_id", user.id)
             ]);
+
+            const currentAssetsTotal = dbAssets?.reduce((sum, a) => sum + Number(a.amount), 0) || 0;
+            const currentLiabilitiesTotal = dbLiabilities?.reduce((sum, l) => sum + Number(l.total_amount), 0) || 0;
 
             const enriched = historyMonths.map(m => {
                 const income = allIncomes?.reduce((sum, inc) => {
                     const rd = new Date(inc.receive_date || inc.created_at);
-                    if (inc.is_recurring) return sum + Number(inc.amount); // Simplification for cumulative
+                    if (inc.is_recurring) return sum + Number(inc.amount);
                     return rd.toISOString().slice(0, 7) === m ? sum + Number(inc.amount) : sum;
                 }, 0) || 0;
 
@@ -59,6 +66,8 @@ export function NetWorthChart() {
             });
 
             setHistoryData(enriched);
+            // We can store the current balance sheet totals if needed
+            (window as any)._currentBalance = { assets: currentAssetsTotal, liabilities: currentLiabilitiesTotal };
         } catch (error) {
             console.error("Error fetching net worth data:", error);
         } finally {
@@ -139,7 +148,7 @@ export function NetWorthChart() {
                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v) => `$${v / 1000}k`} />
                                 <Tooltip
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                    formatter={(v: number) => [`$${v.toLocaleString()}`, '']}
+                                    formatter={(v: any) => [`$${Number(v || 0).toLocaleString()}`, '']}
                                 />
                                 <Legend verticalAlign="top" height={36} />
                                 <Area

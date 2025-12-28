@@ -18,6 +18,7 @@ import { PartnerManager } from "@/components/partner-manager";
 import { OverviewDashboard } from "@/components/overview-dashboard";
 import { CardManager } from "@/components/card-manager";
 import { LandingPage } from "@/components/landing-page";
+import { BalanceSheet } from "@/components/balance-sheet";
 
 export default function Home() {
     const searchParams = useSearchParams();
@@ -40,7 +41,7 @@ export default function Home() {
         return () => subscription.unsubscribe();
     }, []);
 
-    const [activeTab, setActiveTab] = useState<"dashboard" | "fixed" | "variable" | "card" | "income" | "budget" | "goals" | "networth" | "partner">("dashboard");
+    const [activeTab, setActiveTab] = useState<"dashboard" | "fixed" | "variable" | "card" | "income" | "budget" | "goals" | "networth" | "partner" | "balance">("dashboard");
 
     const [file, setFile] = useState<File | null>(null);
     const [isPaid, setIsPaid] = useState(false);
@@ -141,6 +142,12 @@ export default function Home() {
                     Resumen
                 </button>
                 <button
+                    onClick={() => setActiveTab("balance")}
+                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "balance" ? "bg-white text-emerald-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    📊 Balance
+                </button>
+                <button
                     onClick={() => setActiveTab("fixed")}
                     className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === "fixed" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                 >
@@ -204,6 +211,7 @@ export default function Home() {
 
             <div className="w-full max-w-6xl px-4">
                 {activeTab === "dashboard" && <OverviewDashboard />}
+                {activeTab === "balance" && <BalanceSheet />}
                 {activeTab === "fixed" && <FixedExpenses />}
                 {activeTab === "variable" && <VariableExpenses />}
                 {activeTab === "income" && <IncomeTracker />}

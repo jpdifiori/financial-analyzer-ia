@@ -46,9 +46,12 @@ export function FinancialAdvisorChat() {
             const data = await res.json();
             if (data.content) {
                 setMessages(prev => [...prev, { role: "assistant", content: data.content }]);
+            } else if (data.error) {
+                setMessages(prev => [...prev, { role: "assistant", content: `❌ Error: ${data.error}. Asegúrate de que la clave de API de Gemini esté configurada correctamente.` }]);
             }
         } catch (error) {
             console.error("Chat error:", error);
+            setMessages(prev => [...prev, { role: "assistant", content: "Lo siento, tuve un problema de conexión. Por favor reintenta en un momento." }]);
         } finally {
             setIsLoading(false);
         }
@@ -110,8 +113,8 @@ export function FinancialAdvisorChat() {
                             {messages.map((m, i) => (
                                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${m.role === 'user'
-                                            ? 'bg-slate-900 text-white rounded-tr-none'
-                                            : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-none'
+                                        ? 'bg-slate-900 text-white rounded-tr-none'
+                                        : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-none'
                                         }`}>
                                         {m.content}
                                     </div>

@@ -19,6 +19,7 @@ import { OverviewDashboard } from "@/components/overview-dashboard";
 import { CardManager } from "@/components/card-manager";
 import { LandingPage } from "@/components/landing-page";
 import { BalanceSheet } from "@/components/balance-sheet";
+import { SideNav } from "@/components/side-nav";
 
 export default function Home() {
     const searchParams = useSearchParams();
@@ -116,121 +117,69 @@ export default function Home() {
 
     // Authenticated Dashboard
     return (
-        <div className="flex flex-col items-center min-h-[80vh] gap-8 pb-12 relative animate-in fade-in">
-            <div className="absolute top-4 right-4 flex items-center gap-4">
-                <span className="text-xs text-gray-400">{session.user.email}</span>
-                <button onClick={handleLogout} className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline">
-                    Cerrar Sesión
-                </button>
-            </div>
+        <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50 relative">
+            <SideNav
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onLogout={handleLogout}
+                userEmail={session.user.email}
+            />
 
-            <div className="text-center space-y-4 max-w-2xl pt-10">
-                <h1 className="text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary pb-2">
-                    Analizador Financiero IA
-                </h1>
-                <p className="text-xl text-gray-500">
-                    Tu situación financiera, simplificada.
-                </p>
-            </div>
+            <main className="flex-1 p-4 lg:p-10 mt-16 lg:mt-0 overflow-y-auto">
+                <div className="max-w-7xl mx-auto space-y-10">
+                    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-slate-200 pb-8">
+                        <div>
+                            <h2 className="text-3xl font-black text-slate-900 tracking-tight">
+                                {NAV_LABELS[activeTab] || "Dashboard"}
+                            </h2>
+                            <p className="text-slate-500 text-sm font-medium">Gestiona tu economía con inteligencia artificial.</p>
+                        </div>
+                        <div className="hidden lg:flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
+                            <span className="px-4 py-1.5 text-xs text-slate-400 font-bold uppercase tracking-widest border-r border-slate-100">Estado</span>
+                            <div className="flex items-center gap-2 px-4 py-1.5">
+                                <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse" />
+                                <span className="text-xs font-bold text-slate-700">Auditado por IA</span>
+                            </div>
+                        </div>
+                    </div>
 
-            {/* 5 Tabs Navigation */}
-            <div className="flex p-1 bg-gray-100 rounded-lg overflow-x-auto max-w-full">
-                <button
-                    onClick={() => setActiveTab("dashboard")}
-                    className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === "dashboard" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    Resumen
-                </button>
-                <button
-                    onClick={() => setActiveTab("balance")}
-                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "balance" ? "bg-white text-emerald-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    📊 Balance
-                </button>
-                <button
-                    onClick={() => setActiveTab("fixed")}
-                    className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === "fixed" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    Fijos
-                </button>
-                <button
-                    onClick={() => setActiveTab("variable")}
-                    className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === "variable" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    Variables
-                </button>
-                <button
-                    onClick={() => setActiveTab("card")}
-                    className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === "card" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    Tarjeta (PDF)
-                </button>
-                <button
-                    onClick={() => setActiveTab("income")}
-                    className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === "income" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    Ingresos
-                </button>
-                <button
-                    onClick={() => setActiveTab("budget")}
-                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "budget" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    🎯 Presupuestos
-                </button>
-                <button
-                    onClick={() => setActiveTab("goals")}
-                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "goals" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    🚀 Metas
-                </button>
-                <button
-                    onClick={() => setActiveTab("networth")}
-                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "networth" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    📈 Patrimonio
-                </button>
-                <button
-                    onClick={() => setActiveTab("partner")}
-                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "partner" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                    👥 Socios
-                </button>
-                <a
-                    href="/audit"
-                    className="px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all text-orange-600 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-1"
-                >
-                    <span className="text-lg">🛡️</span> Auditoría
-                </a>
-                <a
-                    href="/coach"
-                    className="px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-1"
-                >
-                    <span className="text-lg">🧠</span> Coach IA
-                </a>
-            </div>
-
-            <div className="w-full max-w-6xl px-4">
-                {activeTab === "dashboard" && <OverviewDashboard />}
-                {activeTab === "balance" && <BalanceSheet />}
-                {activeTab === "fixed" && <FixedExpenses />}
-                {activeTab === "variable" && <VariableExpenses />}
-                {activeTab === "income" && <IncomeTracker />}
-                {activeTab === "budget" && <BudgetManager selectedMonth={new Date().toISOString().slice(0, 7)} />}
-                {activeTab === "goals" && <SavingsGoals />}
-                {activeTab === "networth" && <NetWorthChart />}
-                {activeTab === "partner" && <PartnerManager />}
-                {activeTab === "card" && (
-                    <CardManager
-                        file={file}
-                        isPaid={isPaid}
-                        isLoading={isLoading}
-                        analysisData={analysisData}
-                        onFileSelect={handleFileSelect}
-                        onPay={handlePay}
-                        onAnalyze={handleAnalyze}
-                    />
-                )}
-            </div>
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-700">
+                        {activeTab === "dashboard" && <OverviewDashboard />}
+                        {activeTab === "balance" && <BalanceSheet />}
+                        {activeTab === "fixed" && <FixedExpenses />}
+                        {activeTab === "variable" && <VariableExpenses />}
+                        {activeTab === "income" && <IncomeTracker />}
+                        {activeTab === "budget" && <BudgetManager selectedMonth={new Date().toISOString().slice(0, 7)} />}
+                        {activeTab === "goals" && <SavingsGoals />}
+                        {activeTab === "networth" && <NetWorthChart />}
+                        {activeTab === "partner" && <PartnerManager />}
+                        {activeTab === "card" && (
+                            <CardManager
+                                file={file}
+                                isPaid={isPaid}
+                                isLoading={isLoading}
+                                analysisData={analysisData}
+                                onFileSelect={handleFileSelect}
+                                onPay={handlePay}
+                                onAnalyze={handleAnalyze}
+                            />
+                        )}
+                    </div>
+                </div>
+            </main>
         </div>
     );
 }
+
+const NAV_LABELS: Record<string, string> = {
+    dashboard: "Resumen General",
+    balance: "Balance Patrimonial",
+    card: "Análisis de Tarjetas",
+    income: "Gestión de Ingresos",
+    fixed: "Gastos Fijos",
+    variable: "Gastos Variables",
+    budget: "Presupuestos Mensuales",
+    goals: "Metas de Ahorro",
+    networth: "Evolución de Patrimonio",
+    partner: "Socios y Pareja"
+};

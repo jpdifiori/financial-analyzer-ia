@@ -13,7 +13,8 @@ import { VariableExpenses } from "@/components/variable-expenses";
 
 import { OverviewDashboard } from "@/components/overview-dashboard";
 import { CardManager } from "@/components/card-manager";
-import { LandingPage } from "@/components/landing-page"; // [NEW]
+import { LandingPage } from "@/components/landing-page";
+import { BudgetManager } from "@/components/budget-manager";
 
 export default function Home() {
     const searchParams = useSearchParams();
@@ -36,7 +37,7 @@ export default function Home() {
         return () => subscription.unsubscribe();
     }, []);
 
-    const [activeTab, setActiveTab] = useState<"dashboard" | "fixed" | "variable" | "card" | "income">("dashboard");
+    const [activeTab, setActiveTab] = useState<"dashboard" | "fixed" | "variable" | "card" | "income" | "budget">("dashboard");
 
     const [file, setFile] = useState<File | null>(null);
     const [isPaid, setIsPaid] = useState(false);
@@ -160,6 +161,12 @@ export default function Home() {
                 >
                     Ingresos
                 </button>
+                <button
+                    onClick={() => setActiveTab("budget")}
+                    className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all ${activeTab === "budget" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    🎯 Presupuestos
+                </button>
                 <a
                     href="/audit"
                     className="px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all text-orange-600 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-1"
@@ -179,6 +186,7 @@ export default function Home() {
                 {activeTab === "fixed" && <FixedExpenses />}
                 {activeTab === "variable" && <VariableExpenses />}
                 {activeTab === "income" && <IncomeTracker />}
+                {activeTab === "budget" && <BudgetManager selectedMonth={new Date().toISOString().slice(0, 7)} />}
                 {activeTab === "card" && (
                     <CardManager
                         file={file}

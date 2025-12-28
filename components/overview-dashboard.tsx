@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, TrendingDown, TrendingUp, DollarSign, CreditCard, BarChart2 } from "lucide-react";
+import { Loader2, TrendingDown, TrendingUp, DollarSign, CreditCard, BarChart2, AlertCircle, AlertTriangle } from "lucide-react";
 import { GhostExpensesList } from "./ghost-expenses-list";
 import { FinancialTank } from "./financial-tank";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export function OverviewDashboard() {
     const [loading, setLoading] = useState(true);
@@ -28,6 +29,8 @@ export function OverviewDashboard() {
     const [selectedCard, setSelectedCard] = useState<string>("all");
     const [ghostExpenses, setGhostExpenses] = useState<any[]>([]);
     const [historyData, setHistoryData] = useState<any[]>([]); // For Charts
+    const [budgetAlerts, setBudgetAlerts] = useState<string[]>([]); // New state for alerts
+    const [allBudgets, setAllBudgets] = useState<Record<string, { budget: number, spent: number }>>({});
 
     useEffect(() => {
         const fetchMetrics = async () => {
@@ -142,8 +145,31 @@ export function OverviewDashboard() {
                     trends
                 });
 
-                setGhostExpenses(currentAnalyses.flatMap(a => a.ghost_expenses || []));
+                // This line was missing from the original code, assuming it should filter analyses for the current month
+                const currentMonthAnalyses = allAnalyses?.filter(a => a.summary?.period === selectedMonth) || [];
+                setGhostExpenses(currentMonthAnalyses.flatMap(a => a.ghost_expenses || []));
                 setHistoryData(enrichedChartData);
+
+                // --- 4. Fetch Budgets for Alerts ---
+                const { data: budgets } = await supabase
+                    .from("budgets")
+                    .select("category, amount")
+                    .eq("user_id", user.id)
+                    .eq("period", selectedMonth);
+
+                const alerts: string[] = [];
+                const budgetStatus: Record<string, { budget: number, spent: number }> = {};
+                if (budgets && currentData) {
+                    budgets.forEach(b => {
+                        const spent = currentData.var_breakdown[b.category] || currentData.fixed_breakdown[b.category] || 0;
+                        budgetStatus[b.category] = { budget: b.amount, spent };
+                        if (spent > b.amount) {
+                            alerts.push(b.category);
+                        }
+                    });
+                }
+                setBudgetAlerts(alerts);
+                setAllBudgets(budgetStatus);
 
             } catch (error) {
                 console.error("Error calculating metrics:", error);
@@ -164,6 +190,12 @@ export function OverviewDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h2 className="text-2xl font-bold text-gray-900">Resumen Financiero</h2>
                 <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
+                    {budgetAlerts.length > 0 && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg animate-pulse mr-2">
+                            <AlertCircle className="h-4 w-4" />
+                            <span className="text-xs font-bold uppercase">Límite Excedido</span>
+                        </div>
+                    )}
                     <span className="text-xs font-bold text-gray-500 uppercase px-2">Período</span>
                     <input
                         type="month"
@@ -188,6 +220,20 @@ export function OverviewDashboard() {
                 <div className="flex justify-center p-12"><Loader2 className="animate-spin h-8 w-8 text-orange-500" /></div>
             ) : (
                 <>
+                    {/* Budget Warning Banner if any exceeded */}
+                    {budgetAlerts.length > 0 && (
+                        <div className="grid grid-cols-1 gap-4 mb-8">
+                            <Alert variant="destructive" className="bg-red-50 border-red-200">
+                                <AlertTriangle className="h-4 w-4 text-red-600" />
+                                <AlertTitle className="text-red-800 font-bold">¡Atención! Presupuestos Excedidos</AlertTitle>
+                                <AlertDescription className="text-red-700">
+                                    Has superado el límite mensual en: {budgetAlerts.join(", ")}.
+                                    Revisa la pestaña de "Presupuestos" para ajustar tus gastos.
+                                </AlertDescription>
+                            </Alert>
+                        </div>
+                    )}
+
                     {/* Header Metrics */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow">

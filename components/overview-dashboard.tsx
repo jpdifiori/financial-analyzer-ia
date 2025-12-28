@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, TrendingDown, TrendingUp, DollarSign, CreditCard } from "lucide-react";
+import { Loader2, TrendingDown, TrendingUp, DollarSign, CreditCard, BarChart2 } from "lucide-react";
 import { GhostExpensesList } from "./ghost-expenses-list";
 import { FinancialTank } from "./financial-tank";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 
 export function OverviewDashboard() {
     const [loading, setLoading] = useState(true);
@@ -15,11 +16,18 @@ export function OverviewDashboard() {
         fixed: 0,
         variable: 0,
         cards: 0,
-        balance: 0
+        balance: 0,
+        trends: {
+            income: 0,
+            fixed: 0,
+            variable: 0,
+            cards: 0
+        }
     });
     const [cards, setCards] = useState<any[]>([]);
     const [selectedCard, setSelectedCard] = useState<string>("all");
     const [ghostExpenses, setGhostExpenses] = useState<any[]>([]);
+    const [historyData, setHistoryData] = useState<any[]>([]); // For Charts
 
     useEffect(() => {
         const fetchMetrics = async () => {
@@ -28,106 +36,115 @@ export function OverviewDashboard() {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
 
-                // 0. Fetch User Cards (for filter)
+                // 1. Fetch User Cards (for filter)
                 const { data: userCards } = await supabase
                     .from("credit_cards")
                     .select("id, bank_name, issuer, last_4")
                     .eq("user_id", user.id);
                 setCards(userCards || []);
 
-                // Date Ranges
+                // 2. Date Ranges
                 const [year, month] = selectedMonth.split('-');
-                const startOfMonth = `${selectedMonth}-01`;
-                // Calculate end of month correctly
-                const endDate = new Date(parseInt(year), parseInt(month), 0);
-                const endOfMonth = `${selectedMonth}-${endDate.getDate()}`; // YYYY-MM-DD
+                const historyMonths = Array.from({ length: 6 }, (_, i) => {
+                    const d = new Date(parseInt(year), parseInt(month) - 1 - (5 - i), 1);
+                    return d.toISOString().slice(0, 7);
+                });
+                const startOfHistory = `${historyMonths[0]}-01`;
+                const endOfHistory = new Date(parseInt(year), parseInt(month), 0).toISOString().slice(0, 10);
 
-                // 1. Fetch Incomes
-                const { data: incomes } = await supabase
-                    .from("incomes")
-                    .select("*")
-                    .eq("user_id", user.id);
+                // 3. Constant Data (Fixed Expenses & All Incomes)
+                const [
+                    { data: allIncomes },
+                    { data: fixedExp },
+                    { data: allVariable },
+                    { data: allAnalyses }
+                ] = await Promise.all([
+                    supabase.from("incomes").select("*").eq("user_id", user.id),
+                    supabase.from("fixed_expenses").select("*").eq("user_id", user.id),
+                    supabase.from("variable_expenses").select("*").eq("user_id", user.id).gte("date", startOfHistory).lte("date", endOfHistory),
+                    supabase.from("analyses").select("*").eq("user_id", user.id).gte("summary->>period", historyMonths[0]).lte("summary->>period", historyMonths[5])
+                ]);
 
-                let totalIncome = 0;
-                if (incomes) {
-                    const monthStartObj = new Date(Number(year), Number(month) - 1, 1);
-                    const monthEndObj = new Date(Number(year), Number(month), 0, 23, 59, 59);
+                const totalFixed = fixedExp?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
-                    totalIncome = incomes.reduce((sum, inc) => {
-                        // Robust Date Parsing
-                        const receiveStr = inc.receive_date || inc.created_at;
-                        const receiveDate = new Date(receiveStr);
-                        const endDateObj = inc.end_date ? new Date(inc.end_date) : null;
+                // 4. Aggregate History for Charts
+                const enrichedChartData = historyMonths.map(m => {
+                    const mVariableItems = allVariable?.filter(v => v.date.startsWith(m)) || [];
+                    const mAnalyses = allAnalyses?.filter(a => a.summary?.period === m) || [];
 
-                        // Normalize
-                        receiveDate.setHours(0, 0, 0, 0);
-                        if (endDateObj) endDateObj.setHours(0, 0, 0, 0);
+                    const varCats: Record<string, number> = {};
+                    mVariableItems.forEach(i => varCats[i.category || "Otros"] = (varCats[i.category || "Otros"] || 0) + Number(i.amount));
 
-                        if (inc.is_recurring) {
-                            // Relaxed Logic: Active if it hasn't ended yet.
-                            // We ignore the 'start date' (receiveDate) constraint to allow users to see 
-                            // their budget projected in past/future months seamlessly.
-                            const active = (!endDateObj || endDateObj >= monthStartObj);
-                            return active ? sum + Number(inc.amount) : sum;
-                        } else {
-                            // One-time: strict month match
-                            const inMonth = receiveDate >= monthStartObj && receiveDate <= monthEndObj;
-                            return inMonth ? sum + Number(inc.amount) : sum;
-                        }
-                    }, 0);
-                }
+                    const cardCats: Record<string, number> = {};
+                    mAnalyses.forEach(a => {
+                        Object.entries(a.summary?.categories || {}).forEach(([cat, val]) => {
+                            cardCats[cat] = (cardCats[cat] || 0) + Number(val);
+                        });
+                    });
 
-                // 2. Fetch Fixed Expenses
-                // Fixed Expenses are recurring configuration (due_day).
-                // We fetch all active fixed expenses and sum them up for ANY month selected.
-                const { data: fixed } = await supabase
-                    .from("fixed_expenses")
-                    .select("*")
-                    .eq("user_id", user.id);
+                    const finalVarCats: Record<string, number> = { ...varCats };
+                    Object.entries(cardCats).forEach(([c, v]) => finalVarCats[c] = (finalVarCats[c] || 0) + v);
 
-                let totalFixed = 0;
-                if (fixed) {
-                    totalFixed = fixed.reduce((sum, item) => sum + Number(item.amount), 0);
-                }
+                    const fixedCats: Record<string, number> = {};
+                    fixedExp?.forEach(i => fixedCats[i.category || "Otros"] = (fixedCats[i.category || "Otros"] || 0) + Number(i.amount));
 
-                // 3. Fetch Variable Expenses (Range)
-                const { data: variable } = await supabase
-                    .from("variable_expenses")
-                    .select("amount, date")
-                    .eq("user_id", user.id)
-                    .gte("date", startOfMonth)
-                    .lte("date", endOfMonth);
+                    // Monthly Income Calculation
+                    const [yh, mh] = m.split('-');
+                    const ms = new Date(Number(yh), Number(mh) - 1, 1);
+                    const me = new Date(Number(yh), Number(mh), 0, 23, 59, 59);
 
-                const totalVariable = variable?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
+                    const mIncome = allIncomes?.reduce((sum, inc) => {
+                        const rd = new Date(inc.receive_date || inc.created_at);
+                        const ed = inc.end_date ? new Date(inc.end_date) : null;
+                        if (inc.is_recurring) return (!ed || ed >= ms) ? sum + Number(inc.amount) : sum;
+                        return (rd >= ms && rd <= me) ? sum + Number(inc.amount) : sum;
+                    }, 0) || 0;
 
-                // 4. Fetch Card Expenses
-                let analysesQuery = supabase
-                    .from("analyses")
-                    .select("summary, ghost_expenses, card_id")
-                    .eq("user_id", user.id)
-                    .eq("summary->>period", selectedMonth);
+                    return {
+                        month: m,
+                        income: mIncome,
+                        fixed_total: totalFixed,
+                        variable_total: (mVariableItems.reduce((s, i) => s + Number(i.amount), 0) + mAnalyses.reduce((s, a) => s + (a.summary?.total_pay || 0), 0)),
+                        var_breakdown: finalVarCats,
+                        fixed_breakdown: fixedCats
+                    };
+                });
 
+                // 5. Calculate Metrics for Selected Month
+                const currentData = enrichedChartData.find(d => d.month === selectedMonth);
+                const currentAnalyses = allAnalyses?.filter(a => a.summary?.period === selectedMonth && (selectedCard === "all" || a.card_id === selectedCard)) || [];
+
+                // If specific card is selected, we override the variable total with that specific card + manual variable
+                let totalCards = currentData?.variable_total || 0;
                 if (selectedCard !== "all") {
-                    analysesQuery = analysesQuery.eq("card_id", selectedCard);
+                    const cardSpecificPay = currentAnalyses.reduce((sum, a) => sum + (a.summary?.total_pay || 0), 0);
+                    const manualVar = allVariable?.filter(v => v.date.startsWith(selectedMonth)).reduce((s, i) => s + Number(i.amount), 0) || 0;
+                    totalCards = cardSpecificPay + manualVar;
                 }
 
-                const { data: analyses } = await analysesQuery;
-
-                const totalCards = analyses?.reduce((sum, a) => sum + (a.summary?.total_pay || 0), 0) || 0;
-
-                const aggregatedGhost = analyses?.flatMap(a => a.ghost_expenses || []) || [];
-                setGhostExpenses(aggregatedGhost);
-
-                // Calculation
-                const totalExpenses = totalFixed + totalVariable + totalCards;
+                // Trend Calculation
+                const currentIdx = historyMonths.indexOf(selectedMonth);
+                const trends = { income: 0, fixed: 0, variable: 0, cards: 0 };
+                if (currentIdx > 0) {
+                    const curr = enrichedChartData[currentIdx];
+                    const prev = enrichedChartData[currentIdx - 1];
+                    const calcTrend = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
+                    trends.income = calcTrend(curr.income, prev.income);
+                    trends.variable = calcTrend(curr.variable_total, prev.variable_total);
+                }
 
                 setMetrics({
-                    income: totalIncome,
+                    income: currentData?.income || 0,
                     fixed: totalFixed,
-                    variable: totalVariable,
-                    cards: totalCards,
-                    balance: totalIncome - totalExpenses
+                    variable: allVariable?.filter(v => v.date.startsWith(selectedMonth)).reduce((s, i) => s + Number(i.amount), 0) || 0,
+                    cards: currentAnalyses.reduce((sum, a) => sum + (a.summary?.total_pay || 0), 0),
+                    balance: (currentData?.income || 0) - (totalFixed + (currentData?.variable_total || 0)),
+                    trends
                 });
+
+                setGhostExpenses(currentAnalyses.flatMap(a => a.ghost_expenses || []));
+                setHistoryData(enrichedChartData);
+
             } catch (error) {
                 console.error("Error calculating metrics:", error);
             } finally {
@@ -138,8 +155,8 @@ export function OverviewDashboard() {
         fetchMetrics();
     }, [selectedMonth, selectedCard]);
 
-    const totalExpenses = metrics.fixed + metrics.variable + metrics.cards;
     const isHealthy = metrics.balance >= 0;
+    const totalExpenses = metrics.fixed + metrics.variable + metrics.cards;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -175,8 +192,15 @@ export function OverviewDashboard() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                                    <TrendingUp className="h-4 w-4 text-green-600" /> Ingresos (Capacidad)
+                                <CardTitle className="text-sm font-medium text-slate-500 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <TrendingUp className="h-4 w-4 text-emerald-600" /> Ingresos
+                                    </div>
+                                    {metrics.trends.income !== 0 && (
+                                        <span className={`text-[10px] font-bold ${metrics.trends.income > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                            {metrics.trends.income > 0 ? '+' : ''}{metrics.trends.income.toFixed(1)}%
+                                        </span>
+                                    )}
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
@@ -197,8 +221,15 @@ export function OverviewDashboard() {
 
                         <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                                    <DollarSign className="h-4 w-4 text-orange-400" /> Gastos Variables
+                                <CardTitle className="text-sm font-medium text-slate-500 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <DollarSign className="h-4 w-4 text-amber-500" /> Gastos Variables
+                                    </div>
+                                    {metrics.trends.variable !== 0 && (
+                                        <span className={`text-[10px] font-bold ${metrics.trends.variable < 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                            {metrics.trends.variable > 0 ? '+' : ''}{metrics.trends.variable.toFixed(1)}%
+                                        </span>
+                                    )}
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
@@ -214,7 +245,7 @@ export function OverviewDashboard() {
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold text-slate-900">${metrics.cards.toLocaleString()}</div>
-                                <p className="text-xs text-slate-400 mt-1">Resúmenes: {selectedMonth}</p>
+                                <p className="text-xs text-slate-400 mt-1">{selectedMonth}</p>
                             </CardContent>
                         </Card>
                     </div>
@@ -236,6 +267,11 @@ export function OverviewDashboard() {
                                             ? "¡Excelente! Tus ingresos superan tus gastos este mes."
                                             : "Cuidado, tus gastos superan tus ingresos este mes."}
                                     </p>
+                                    <div className="mt-4 flex flex-wrap gap-2 justify-center md:justify-start">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border ${isHealthy ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                                            {isHealthy ? 'Presupuesto OK' : 'Déficit Detectado'}
+                                        </span>
+                                    </div>
 
                                     {/* Simple Bar for context (Income vs Expenses) */}
                                     <div className="mt-6 space-y-2 text-sm text-gray-500">
@@ -268,6 +304,114 @@ export function OverviewDashboard() {
                             <GhostExpensesList expenses={ghostExpenses} />
                         </div>
                     )}
+
+                    {/* Historical Charts */}
+                    <div className="grid grid-cols-1 gap-8">
+
+                        {/* 1. Ingresos Mensuales */}
+                        <Card className="border-slate-200 shadow-sm overflow-hidden">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                    <BarChart2 className="h-4 w-4 text-green-600" /> Evolución de Ingresos
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <div className="h-[300px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={historyData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                            <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                                            <Bar dataKey="income" name="Ingresos" radius={[4, 4, 0, 0]}>
+                                                {historyData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={index === historyData.length - 1 ? '#059669' : '#10b981'} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* 2. Gastos Fijos (Categorizados) */}
+                        <Card className="border-slate-200 shadow-sm overflow-hidden">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                                <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900">
+                                    <BarChart2 className="h-4 w-4 text-orange-600" /> Distribución de Gastos Fijos
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <div className="h-[350px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart
+                                            data={historyData.map(d => ({
+                                                month: d.month,
+                                                ...d.fixed_breakdown
+                                            }))}
+                                            stackOffset="sign"
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                            <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                                            <Legend verticalAlign="top" height={36} />
+                                            {/* We need keys from fixed_breakdown. Since fixed_expenses is constant for all months 
+                                                in our mock, we just take keys from the last month. */}
+                                            {Object.keys(historyData[historyData.length - 1]?.fixed_breakdown || {}).map((cat, i) => (
+                                                <Bar
+                                                    key={cat}
+                                                    dataKey={cat}
+                                                    stackId="a"
+                                                    fill={['#ea580c', '#f97316', '#fb923c', '#fdba74', '#fed7aa', '#ffedd5', '#fff7ed'][i % 7]}
+                                                    radius={i === Object.keys(historyData[historyData.length - 1]?.fixed_breakdown || {}).length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                                                />
+                                            ))}
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* 3. Gastos Variables (Categorizados) */}
+                        <Card className="border-slate-200 shadow-sm overflow-hidden">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                                <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900">
+                                    <BarChart2 className="h-4 w-4 text-indigo-600" /> Consumo Variable (Analizado + Manual)
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <div className="h-[350px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart
+                                            data={historyData.map(d => ({
+                                                month: d.month,
+                                                ...d.var_breakdown
+                                            }))}
+                                            stackOffset="sign"
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                            <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                                            <Legend verticalAlign="top" height={36} />
+                                            {/* Union of all keys for variable categories across history */}
+                                            {Array.from(new Set(historyData.flatMap(d => Object.keys(d.var_breakdown)))).map((cat, i) => (
+                                                <Bar
+                                                    key={cat}
+                                                    dataKey={cat}
+                                                    stackId="b"
+                                                    fill={['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff', '#f5f3ff'][i % 7]}
+                                                    radius={i === Array.from(new Set(historyData.flatMap(d => Object.keys(d.var_breakdown)))).length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                                                />
+                                            ))}
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                    </div>
                 </>
             )}
         </div>

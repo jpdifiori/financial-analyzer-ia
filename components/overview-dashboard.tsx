@@ -2,22 +2,25 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, TrendingDown, TrendingUp, DollarSign, CreditCard, BarChart2, AlertCircle, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+    Loader2, TrendingDown, TrendingUp, DollarSign,
+    CreditCard, BarChart2, AlertCircle, AlertTriangle,
+    ShoppingBag, LineChart as LineChartIcon, Building2, Wallet, PieChart
+} from "lucide-react";
 import { GhostExpensesList } from "./ghost-expenses-list";
-import { FinancialTank } from "./financial-tank";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { NumberTicker } from "@/components/ui/number-ticker";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-export function OverviewDashboard() {
+export function OverviewDashboard({ selectedMonth, setSelectedMonth }: { selectedMonth: string, setSelectedMonth: (m: string) => void }) {
     const [loading, setLoading] = useState(true);
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
     const [metrics, setMetrics] = useState({
         income: 0,
         fixed: 0,
         variable: 0,
         cards: 0,
         balance: 0,
+        netWorth: 0,
         trends: {
             income: 0,
             fixed: 0,
@@ -29,9 +32,18 @@ export function OverviewDashboard() {
     const [cards, setCards] = useState<any[]>([]);
     const [selectedCard, setSelectedCard] = useState<string>("all");
     const [ghostExpenses, setGhostExpenses] = useState<any[]>([]);
-    const [historyData, setHistoryData] = useState<any[]>([]); // For Charts
-    const [budgetAlerts, setBudgetAlerts] = useState<string[]>([]); // New state for alerts
+    const [historyData, setHistoryData] = useState<any[]>([]);
+    const [budgetAlerts, setBudgetAlerts] = useState<string[]>([]);
     const [allBudgets, setAllBudgets] = useState<Record<string, { budget: number, spent: number }>>({});
+
+    // Helper to get the "Billing Period" (Summary Period) for a given Payment Month
+    // Rule: Payment in Month N corresponds to Summary of Month N-1
+    const getBillingPeriod = (paymentMonth: string) => {
+        if (!paymentMonth) return "";
+        const [y, m] = paymentMonth.split('-').map(Number);
+        const d = new Date(y, m - 2, 1); // m is 1-based. -1 for 0-based, -1 for prev month = -2
+        return d.toISOString().slice(0, 7);
+    };
 
     useEffect(() => {
         const fetchMetrics = async () => {
@@ -40,125 +52,177 @@ export function OverviewDashboard() {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
 
-                // 1. Fetch User Cards (for filter)
                 const { data: userCards } = await supabase
                     .from("credit_cards")
                     .select("id, bank_name, issuer, last_4")
                     .eq("user_id", user.id);
                 setCards(userCards || []);
 
-                // 2. Date Ranges
-                const [year, month] = selectedMonth.split('-');
+                // Generate history months (current + 5 previous)
+                const [year, month] = selectedMonth.split('-').map(Number);
                 const historyMonths = Array.from({ length: 6 }, (_, i) => {
-                    const d = new Date(parseInt(year), parseInt(month) - 1 - (5 - i), 1);
+                    const d = new Date(year, month - 1 - (5 - i), 1);
                     return d.toISOString().slice(0, 7);
                 });
-                const startOfHistory = `${historyMonths[0]}-01`;
-                const endOfHistory = new Date(parseInt(year), parseInt(month), 0).toISOString().slice(0, 10);
 
-                // 3. Constant Data (Fixed Expenses & All Incomes)
+                const startOfHistory = `${historyMonths[0]}-01`;
+                const endOfHistory = new Date(year, month, 0).toISOString().slice(0, 10);
+
+                // Fetch all raw data needed
                 const [
                     { data: allIncomes },
                     { data: fixedExp },
                     { data: allVariable },
-                    { data: allAnalyses }
+                    { data: allAnalyses },
+                    { data: allAssets },
+                    { data: allLiabilities }
                 ] = await Promise.all([
                     supabase.from("incomes").select("*").eq("user_id", user.id),
                     supabase.from("fixed_expenses").select("*").eq("user_id", user.id),
                     supabase.from("variable_expenses").select("*").eq("user_id", user.id).gte("date", startOfHistory).lte("date", endOfHistory),
-                    supabase.from("analyses").select("*").eq("user_id", user.id).gte("summary->>period", historyMonths[0]).lte("summary->>period", historyMonths[5])
+                    supabase.from("analyses").select("*").eq("user_id", user.id), // Fetch all analyses, filter in memory by billing period
+                    supabase.from("assets").select("*").eq("user_id", user.id),
+                    supabase.from("liabilities").select("*").eq("user_id", user.id)
                 ]);
 
-                const totalFixed = fixedExp?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+                const totalAssetsValue = allAssets?.reduce((sum, a) => sum + Number(a.amount), 0) || 0;
+                const totalLiabilitiesValue = allLiabilities?.reduce((sum, l) => sum + Number(l.total_amount), 0) || 0;
+                const netWorth = totalAssetsValue - totalLiabilitiesValue;
 
-                // 4. Aggregate History for Charts
+                // Process data for each month in history
                 const enrichedChartData = historyMonths.map(m => {
-                    const mVariableItems = allVariable?.filter(v => v.date.startsWith(m)) || [];
-                    const mAnalyses = allAnalyses?.filter(a => a.summary?.period === m) || [];
+                    const billingPeriod = getBillingPeriod(m);
 
+                    const mVariableItems = allVariable?.filter(v => v.date.startsWith(m)) || [];
+                    // Filter analyses: Payment Month 'm' matches Summary Period 'billingPeriod'
+                    const mAnalyses = allAnalyses?.filter(a => a.summary?.period === billingPeriod) || [];
+
+                    const [yh, mh] = m.split('-').map(Number);
+                    const ms = new Date(yh, mh - 1, 1);
+                    const me = new Date(yh, mh, 0, 23, 59, 59);
+
+                    // Variable Breakdown
                     const varCats: Record<string, number> = {};
                     mVariableItems.forEach(i => varCats[i.category || "Otros"] = (varCats[i.category || "Otros"] || 0) + Number(i.amount));
 
+                    // Cards Breakdown
                     const cardCats: Record<string, number> = {};
+                    let cardsTotalPay = 0;
                     mAnalyses.forEach(a => {
+                        const payAmt = Number(a.summary?.total_pay || a.summary?.total_ars || 0);
+                        cardsTotalPay += payAmt;
                         Object.entries(a.summary?.categories || {}).forEach(([cat, val]) => {
                             cardCats[cat] = (cardCats[cat] || 0) + Number(val);
                         });
                     });
 
+                    // Merge Categories
                     const finalVarCats: Record<string, number> = { ...varCats };
+                    // Optionally merge card categories into main breakdown? 
+                    // Usually user wants to see what they spent on, so yes.
+                    // But strictly 'Cards' is a separate line item in the summary.
+                    // For the Pie Chart (Expenses Breakdown), mixing them is good.
                     Object.entries(cardCats).forEach(([c, v]) => finalVarCats[c] = (finalVarCats[c] || 0) + v);
 
+                    // Fixed Expenses
+                    const mFixedItems = fixedExp?.filter(f => {
+                        const s = f.start_date ? new Date(f.start_date) : null;
+                        const e = f.end_date ? new Date(f.end_date) : null;
+                        return (!s || s <= me) && (!e || e >= ms);
+                    }) || [];
+                    const mFixedTotal = mFixedItems.reduce((sum, f) => sum + Number(f.amount), 0);
+
                     const fixedCats: Record<string, number> = {};
-                    fixedExp?.forEach(i => fixedCats[i.category || "Otros"] = (fixedCats[i.category || "Otros"] || 0) + Number(i.amount));
+                    mFixedItems.forEach(i => fixedCats[i.category || "Otros"] = (fixedCats[i.category || "Otros"] || 0) + Number(i.amount));
 
-                    // Monthly Income Calculation
-                    const [yh, mh] = m.split('-');
-                    const ms = new Date(Number(yh), Number(mh) - 1, 1);
-                    const me = new Date(Number(yh), Number(mh), 0, 23, 59, 59);
-
+                    // Income 
                     const mIncome = allIncomes?.reduce((sum, inc) => {
                         const rd = new Date(inc.receive_date || inc.created_at);
+                        const sd = inc.start_date ? new Date(inc.start_date) : null;
                         const ed = inc.end_date ? new Date(inc.end_date) : null;
-                        if (inc.is_recurring) return (!ed || ed >= ms) ? sum + Number(inc.amount) : sum;
+
+                        if (inc.is_recurring) {
+                            return ((!sd || sd <= me) && (!ed || ed >= ms)) ? sum + Number(inc.amount) : sum;
+                        }
                         return (rd >= ms && rd <= me) ? sum + Number(inc.amount) : sum;
                     }, 0) || 0;
 
+                    const mVariableTotal = mVariableItems.reduce((s, i) => s + Number(i.amount), 0);
+
                     return {
                         month: m,
+                        billingPeriod: billingPeriod,
                         income: mIncome,
-                        fixed_total: totalFixed,
-                        variable_total: (mVariableItems.reduce((s, i) => s + Number(i.amount), 0) + mAnalyses.reduce((s, a) => s + (a.summary?.total_pay || 0), 0)),
+                        fixed_total: mFixedTotal,
+                        // Total Outflow = Fixed + Variable (Cash) + Cards (Payment)
+                        total_expenses: mFixedTotal + mVariableTotal + cardsTotalPay,
+                        variable_cash: mVariableTotal,
+                        cards_payment: cardsTotalPay,
                         var_breakdown: finalVarCats,
                         fixed_breakdown: fixedCats
                     };
                 });
 
-                // 5. Calculate Metrics for Selected Month
                 const currentData = enrichedChartData.find(d => d.month === selectedMonth);
-                const currentAnalyses = allAnalyses?.filter(a => a.summary?.period === selectedMonth && (selectedCard === "all" || a.card_id === selectedCard)) || [];
 
-                // If specific card is selected, we override the variable total with that specific card + manual variable
-                let totalCards = currentData?.variable_total || 0;
-                if (selectedCard !== "all") {
-                    const cardSpecificPay = currentAnalyses.reduce((sum, a) => sum + (a.summary?.total_pay || 0), 0);
-                    const manualVar = allVariable?.filter(v => v.date.startsWith(selectedMonth)).reduce((s, i) => s + Number(i.amount), 0) || 0;
-                    totalCards = cardSpecificPay + manualVar;
+                // Card Details for specific selection
+                const currentAnalyses = allAnalyses?.filter(a => {
+                    const matchPeriod = a.summary?.period === getBillingPeriod(selectedMonth);
+                    const matchCard = selectedCard === "all" || a.card_id === selectedCard;
+                    return matchPeriod && matchCard;
+                }) || [];
+
+                // Metrics Calculation
+                const income = Number(currentData?.income || 0);
+                const fixed = Number(currentData?.fixed_total || 0);
+                const variable = Number(currentData?.variable_cash || 0);
+
+                // For 'cards' metric, we use the specific sum of the filtered analyses (if a card is selected) 
+                // or the total from the month data.
+                let cardsMetric = 0;
+                if (selectedCard === "all") {
+                    cardsMetric = currentData?.cards_payment || 0;
+                } else {
+                    cardsMetric = currentAnalyses.reduce((sum, a) => sum + Number(a.summary?.total_pay || a.summary?.total_ars || 0), 0);
                 }
 
-                // Trend Calculation
+                const totalExpenses = fixed + variable + cardsMetric;
+                const balance = income - totalExpenses;
+
+                // Trends (vs previous month)
                 const currentIdx = historyMonths.indexOf(selectedMonth);
                 const trends = { income: 0, fixed: 0, variable: 0, cards: 0 };
                 if (currentIdx > 0) {
                     const curr = enrichedChartData[currentIdx];
                     const prev = enrichedChartData[currentIdx - 1];
                     const calcTrend = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
+
                     trends.income = calcTrend(curr.income, prev.income);
-                    trends.variable = calcTrend(curr.variable_total, prev.variable_total);
+                    trends.variable = calcTrend(curr.total_expenses, prev.total_expenses); // comparing total flow
+                    trends.cards = calcTrend(curr.cards_payment, prev.cards_payment);
                 }
 
-                // --- 5. Age of Money Logic ---
-                const totalSpending6Months = enrichedChartData.reduce((sum, m) => sum + m.fixed_total + m.variable_total, 0);
-                const avgDailySpend = totalSpending6Months / (6 * 30); // Approx 180 days
-                const balance = (currentData?.income || 0) - (totalFixed + (currentData?.variable_total || 0));
+                // Age of Money (approx)
+                const totalSpending6Months = enrichedChartData.reduce((sum, m) => sum + m.total_expenses, 0);
+                const avgDailySpend = totalSpending6Months / (6 * 30);
                 const ageOfMoney = avgDailySpend > 0 ? balance / avgDailySpend : 0;
 
                 setMetrics({
-                    income: currentData?.income || 0,
-                    fixed: totalFixed,
-                    variable: allVariable?.filter(v => v.date.startsWith(selectedMonth)).reduce((s, i) => s + Number(i.amount), 0) || 0,
-                    cards: currentAnalyses.reduce((sum, a) => sum + (a.summary?.total_pay || 0), 0),
-                    balance: balance,
+                    income,
+                    fixed,
+                    variable, // This identifies "Cash Variable Expenses" explicitly
+                    cards: cardsMetric,
+                    balance,
+                    netWorth,
                     trends,
                     ageOfMoney: Math.max(0, Math.floor(ageOfMoney))
                 });
 
-                // This line was missing from the original code, assuming it should filter analyses for the current month
-                const currentMonthAnalyses = allAnalyses?.filter(a => a.summary?.period === selectedMonth) || [];
-                setGhostExpenses(currentMonthAnalyses.flatMap(a => a.ghost_expenses || []));
+                // Ghost Expenses from the RELEVANT summaries (billing period matching selected month)
+                setGhostExpenses(currentAnalyses.flatMap(a => a.ghost_expenses || []));
                 setHistoryData(enrichedChartData);
 
-                // --- 4. Fetch Budgets for Alerts ---
+                // Budget Checks
                 const { data: budgets } = await supabase
                     .from("budgets")
                     .select("category, amount")
@@ -193,293 +257,168 @@ export function OverviewDashboard() {
     const totalExpenses = metrics.fixed + metrics.variable + metrics.cards;
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Date Filter & Title */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold text-gray-900">Resumen Financiero</h2>
-                <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
-                    {budgetAlerts.length > 0 && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg animate-pulse mr-2">
-                            <AlertCircle className="h-4 w-4" />
-                            <span className="text-xs font-bold uppercase">Límite Excedido</span>
-                        </div>
-                    )}
-                    <span className="text-xs font-bold text-gray-500 uppercase px-2">Período</span>
-                    <input
-                        type="month"
-                        value={selectedMonth}
-                        onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="bg-gray-50 border-none text-gray-900 text-sm font-semibold rounded-lg focus:ring-2 focus:ring-orange-500 p-1.5 outline-none"
-                    />
-                    <select
-                        value={selectedCard}
-                        onChange={(e) => setSelectedCard(e.target.value)}
-                        className="bg-gray-50 border-none text-gray-900 text-sm font-semibold rounded-lg focus:ring-2 focus:ring-orange-500 p-1.5 outline-none h-[34px]"
-                    >
-                        <option value="all">Todas las Tarjetas</option>
-                        {cards.map(c => (
-                            <option key={c.id} value={c.id}>{c.bank_name} {c.issuer} ••• {c.last_4}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
+        <div className="min-h-screen w-full relative overflow-hidden bg-slate-950 p-6 md:p-10 font-sans text-slate-100 selection:bg-cyan-500/30">
 
-            {loading ? (
-                <div className="flex justify-center p-12"><Loader2 className="animate-spin h-8 w-8 text-orange-500" /></div>
-            ) : (
-                <>
-                    {/* Budget Warning Banner if any exceeded */}
-                    {budgetAlerts.length > 0 && (
-                        <div className="grid grid-cols-1 gap-4 mb-8">
-                            <Alert variant="destructive" className="bg-red-50 border-red-200">
-                                <AlertTriangle className="h-4 w-4 text-red-600" />
-                                <AlertTitle className="text-red-800 font-bold">¡Atención! Presupuestos Excedidos</AlertTitle>
-                                <AlertDescription className="text-red-700">
-                                    Has superado el límite mensual en: {budgetAlerts.join(", ")}.
-                                    Revisa la pestaña de "Presupuestos" para ajustar tus gastos.
-                                </AlertDescription>
-                            </Alert>
-                        </div>
-                    )}
+            {/* Aurora Background Effects - Deep & Organic */}
+            <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-purple-600/30 rounded-full blur-[120px] pointer-events-none animate-pulse duration-[8000ms]" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-500/20 rounded-full blur-[100px] pointer-events-none animate-pulse duration-[10000ms]" />
+            <div className="absolute top-[40%] left-[30%] w-[400px] h-[400px] bg-pink-600/20 rounded-full blur-[120px] pointer-events-none" />
 
-                    {/* Header Metrics */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-500 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <TrendingUp className="h-4 w-4 text-emerald-600" /> Ingresos
-                                    </div>
-                                    {metrics.trends.income !== 0 && (
-                                        <span className={`text-[10px] font-bold ${metrics.trends.income > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                            {metrics.trends.income > 0 ? '+' : ''}{metrics.trends.income.toFixed(1)}%
-                                        </span>
-                                    )}
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-slate-900">${metrics.income.toLocaleString()}</div>
-                            </CardContent>
-                        </Card>
+            <div className="relative z-10 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
 
-                        <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                                    <DollarSign className="h-4 w-4 text-orange-600" /> Gastos Fijos
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-slate-900">${metrics.fixed.toLocaleString()}</div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-500 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <DollarSign className="h-4 w-4 text-amber-500" /> Gastos Variables
-                                    </div>
-                                    {metrics.trends.variable !== 0 && (
-                                        <span className={`text-[10px] font-bold ${metrics.trends.variable < 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                            {metrics.trends.variable > 0 ? '+' : ''}{metrics.trends.variable.toFixed(1)}%
-                                        </span>
-                                    )}
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-slate-900">${metrics.variable.toLocaleString()}</div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                                    <CreditCard className="h-4 w-4 text-slate-900" /> Tarjetas
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-slate-900">${metrics.cards.toLocaleString()}</div>
-                                <p className="text-xs text-slate-400 mt-1">{selectedMonth}</p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="bg-indigo-900 border-indigo-800 shadow-lg shadow-indigo-900/20 text-white lg:col-span-1">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-bold text-indigo-300 uppercase flex items-center gap-2">
-                                    <TrendingUp className="h-3 w-3" /> Edad del Dinero
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-3xl font-black text-white">{metrics.ageOfMoney} <span className="text-sm font-normal text-indigo-300">días</span></div>
-                                <p className="text-[10px] text-indigo-400 mt-1">Capacidad de sustento actual</p>
-                            </CardContent>
-                        </Card>
+                {/* Header */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 drop-shadow-sm">
+                            Resumen Financiero
+                        </h1>
+                        <p className="text-slate-400 font-medium tracking-wide">Visión general de tu ecosistema económico</p>
                     </div>
+                </div>
 
-                    {/* Financial Health Visualization */}
-                    <Card className="border border-slate-200 shadow-lg bg-white overflow-hidden">
-                        <CardHeader className="bg-slate-950 text-white py-4">
-                            <CardTitle className="text-center text-lg font-light tracking-wide">BALANCE DE {selectedMonth}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-8 pt-8 pb-8">
-                            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
-                                {/* Left: Numeric Summary */}
-                                <div className="text-center md:text-left">
-                                    <div className={`text-5xl lg:text-6xl font-black tracking-tighter ${isHealthy ? 'text-slate-900' : 'text-red-600'} mb-2`}>
-                                        ${metrics.balance.toLocaleString()}
-                                    </div>
-                                    <p className="text-gray-500 max-w-xs mx-auto md:mx-0">
-                                        {isHealthy
-                                            ? "¡Excelente! Tus ingresos superan tus gastos este mes."
-                                            : "Cuidado, tus gastos superan tus ingresos este mes."}
-                                    </p>
-                                    <div className="mt-4 flex flex-wrap gap-2 justify-center md:justify-start">
-                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border ${isHealthy ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                                            {isHealthy ? 'Presupuesto OK' : 'Déficit Detectado'}
-                                        </span>
-                                    </div>
+                {loading ? (
+                    <div className="flex justify-center p-20">
+                        <Loader2 className="animate-spin h-10 w-10 text-cyan-400" />
+                    </div>
+                ) : (
+                    <>
+                        {/* Main KPI Grid - Hero Section */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-                                    {/* Simple Bar for context (Income vs Expenses) */}
-                                    <div className="mt-6 space-y-2 text-sm text-gray-500">
-                                        <div className="flex justify-between w-full max-w-xs border-b border-gray-100 pb-1">
-                                            <span>Ingresos Totales</span>
-                                            <span className="font-semibold text-slate-700">${metrics.income.toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex justify-between w-full max-w-xs">
-                                            <span>Gastos Totales</span>
-                                            <span className="font-semibold text-red-600">${totalExpenses.toLocaleString()}</span>
+                            {/* Monthly Balance - Glass Card (Now Larger) */}
+                            <div className={cn(
+                                "lg:col-span-12 rounded-[2rem] border border-white/10 backdrop-blur-2xl shadow-2xl p-12 flex flex-col justify-center relative overflow-hidden group min-h-[400px]",
+                                isHealthy ? "bg-emerald-950/30" : "bg-rose-950/30"
+                            )}>
+                                <div className={cn("absolute inset-0 opacity-20 blur-3xl group-hover:opacity-30 transition-opacity", isHealthy ? "bg-emerald-500" : "bg-rose-500")} />
+
+                                <div className="relative z-10 text-center space-y-8">
+                                    <p className="text-sm font-bold uppercase tracking-[0.4em] text-slate-400">Balance Mensual</p>
+                                    <div className={cn("text-[80px] md:text-[120px] font-black tracking-tighter drop-shadow-lg leading-none", isHealthy ? "text-emerald-400" : "text-rose-400")}>
+                                        {isHealthy ? '+' : ''}<NumberTicker value={metrics.balance} />
+                                    </div>
+                                    <div>
+                                        <div className={cn("inline-flex items-center px-8 py-3 rounded-full text-sm font-bold border backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.2)]",
+                                            isHealthy ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                                        )}>
+                                            {isHealthy ? "Superávit Saludable" : "Atención Requerida"}
                                         </div>
                                     </div>
-                                </div>
-
-                                {/* Right: The Tank Visualization */}
-                                <div className="flex flex-col items-center">
-                                    <FinancialTank
-                                        totalIncome={metrics.income}
-                                        totalExpenses={totalExpenses}
-                                        currency="ARS"
-                                    />
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Ghost Expenses List Integration */}
-                    {ghostExpenses.length > 0 && (
-                        <div className="pt-4">
-                            <GhostExpensesList expenses={ghostExpenses} />
                         </div>
-                    )}
 
-                    {/* Historical Charts */}
-                    <div className="grid grid-cols-1 gap-8">
+                        {/* Income / Expense / Cards - Neon Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {[
+                                { title: "Ingresos", value: metrics.income, icon: TrendingUp, color: "text-cyan-400", bg: "bg-cyan-500/20", border: "border-cyan-500/30", shadow: "shadow-cyan-500/20", trend: metrics.trends.income },
+                                { title: "Gastos Totales", value: totalExpenses, icon: TrendingDown, color: "text-purple-400", bg: "bg-purple-500/20", border: "border-purple-500/30", shadow: "shadow-purple-500/20", trend: metrics.trends.variable },
+                                { title: "Tarjetas (Pago Mensual)", value: metrics.cards, icon: CreditCard, color: "text-pink-400", bg: "bg-pink-500/20", border: "border-pink-500/30", shadow: "shadow-pink-500/20", trend: metrics.trends.cards },
+                            ].map((item, i) => (
+                                <div key={i} className="rounded-[2rem] border border-white/5 bg-white/5 backdrop-blur-xl shadow-lg p-6 hover:bg-white/10 hover:-translate-y-1 transition-all duration-300 group">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className={`p-3 rounded-2xl ${item.bg} ${item.border} border ${item.color} shadow-[0_0_15px_rgba(0,0,0,0.2)]`}>
+                                            <item.icon className="h-6 w-6" />
+                                        </div>
+                                        {item.trend !== 0 && (
+                                            <span className={cn("text-xs font-bold px-2 py-1 rounded-lg bg-black/40 backdrop-blur border border-white/10", item.trend > 0 ? "text-emerald-400" : "text-rose-400")}>
+                                                {item.trend > 0 ? '+' : ''}{item.trend.toFixed(1)}%
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">{item.title}</h3>
+                                    <div className={`text-4xl font-black text-white tracking-tighter drop-shadow-lg`}>
+                                        $<NumberTicker value={item.value} />
+                                    </div>
+                                    {i === 2 && (
+                                        <p className="text-[10px] text-slate-500 mt-2 font-medium">
+                                            *Resumen período {getBillingPeriod(selectedMonth)}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
 
-                        {/* 1. Ingresos Mensuales */}
-                        <Card className="border-slate-200 shadow-sm overflow-hidden">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                                    <BarChart2 className="h-4 w-4 text-green-600" /> Evolución de Ingresos
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-6">
-                                <div className="h-[300px] w-full">
+                        {/* Charts Section - Aurora Pods */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                            {/* Income Evolution */}
+                            <div className="rounded-[2rem] border border-white/10 bg-black/20 backdrop-blur-2xl shadow-xl p-8 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-[50px] pointer-events-none" />
+                                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2 relative z-10">
+                                    <BarChart2 className="h-5 w-5 text-indigo-400" />
+                                    Evolución de Ingresos
+                                </h3>
+                                <div className="h-[250px] w-full relative z-10">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={historyData}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                            <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                            <Bar dataKey="income" name="Ingresos" radius={[4, 4, 0, 0]}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v) => `$${v / 1000}k`} />
+                                            <Tooltip
+                                                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                                contentStyle={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                                                itemStyle={{ color: '#fff' }}
+                                                labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                                            />
+                                            <Bar dataKey="income" fill="#6366f1" radius={[6, 6, 6, 6]} barSize={40}>
                                                 {historyData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={index === historyData.length - 1 ? '#059669' : '#10b981'} />
+                                                    <Cell key={`cell-${index}`} fillOpacity={0.6 + (index / historyData.length) * 0.4} />
                                                 ))}
                                             </Bar>
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
 
-                        {/* 2. Gastos Fijos (Categorizados) */}
-                        <Card className="border-slate-200 shadow-sm overflow-hidden">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                                <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900">
-                                    <BarChart2 className="h-4 w-4 text-orange-600" /> Distribución de Gastos Fijos
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-6">
-                                <div className="h-[350px] w-full">
+                            {/* Expenses Breakdown */}
+                            <div className="rounded-[2rem] border border-white/10 bg-black/20 backdrop-blur-2xl shadow-xl p-8 relative overflow-hidden">
+                                <div className="absolute bottom-0 left-0 w-32 h-32 bg-pink-500/10 rounded-full blur-[50px] pointer-events-none" />
+                                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2 relative z-10">
+                                    <PieChart className="h-5 w-5 text-pink-400" />
+                                    Distribución de Gastos
+                                </h3>
+                                <div className="h-[250px] w-full relative z-10">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart
-                                            data={historyData.map(d => ({
-                                                month: d.month,
-                                                ...d.fixed_breakdown
-                                            }))}
+                                            data={historyData.map(d => ({ month: d.month, ...d.var_breakdown }))}
                                             stackOffset="sign"
                                         >
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                            <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                            <Legend verticalAlign="top" height={36} />
-                                            {/* We need keys from fixed_breakdown. Since fixed_expenses is constant for all months 
-                                                in our mock, we just take keys from the last month. */}
-                                            {Object.keys(historyData[historyData.length - 1]?.fixed_breakdown || {}).map((cat, i) => (
-                                                <Bar
-                                                    key={cat}
-                                                    dataKey={cat}
-                                                    stackId="a"
-                                                    fill={['#ea580c', '#f97316', '#fb923c', '#fdba74', '#fed7aa', '#ffedd5', '#fff7ed'][i % 7]}
-                                                    radius={i === Object.keys(historyData[historyData.length - 1]?.fixed_breakdown || {}).length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                                                />
-                                            ))}
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* 3. Gastos Variables (Categorizados) */}
-                        <Card className="border-slate-200 shadow-sm overflow-hidden">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                                <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900">
-                                    <BarChart2 className="h-4 w-4 text-indigo-600" /> Consumo Variable (Analizado + Manual)
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-6">
-                                <div className="h-[350px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart
-                                            data={historyData.map(d => ({
-                                                month: d.month,
-                                                ...d.var_breakdown
-                                            }))}
-                                            stackOffset="sign"
-                                        >
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                            <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                            <Legend verticalAlign="top" height={36} />
-                                            {/* Union of all keys for variable categories across history */}
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v) => `$${v / 1000}k`} />
+                                            <Tooltip
+                                                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                                contentStyle={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                                                itemStyle={{ color: '#fff' }}
+                                                labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                                            />
                                             {Array.from(new Set(historyData.flatMap(d => Object.keys(d.var_breakdown)))).map((cat, i) => (
                                                 <Bar
                                                     key={cat}
                                                     dataKey={cat}
-                                                    stackId="b"
-                                                    fill={['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff', '#f5f3ff'][i % 7]}
-                                                    radius={i === Array.from(new Set(historyData.flatMap(d => Object.keys(d.var_breakdown)))).length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                                                    stackId="a"
+                                                    fill={['#db2777', '#ec4899', '#f472b6', '#fbcfe8', '#8b5cf6'][i % 5]}
+                                                    radius={[2, 2, 2, 2]}
+                                                    fillOpacity={0.8}
                                                 />
                                             ))}
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
 
-                    </div>
-                </>
-            )}
+                        </div>
+
+                        {/* Ghost Expenses - Aurora Glass List */}
+                        {ghostExpenses.length > 0 && (
+                            <div className="rounded-[2rem] border border-white/10 bg-black/20 backdrop-blur-2xl shadow-xl p-8">
+                                <GhostExpensesList expenses={ghostExpenses} />
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

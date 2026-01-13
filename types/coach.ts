@@ -29,8 +29,8 @@ export interface ChatMessage {
     timestamp: Date;
     // Optional: Actions suggested by AI that the UI can render nicely
     suggestedActions?: {
-        type: 'create_task' | 'update_goal';
-        payload: any;
+        type: 'create_task' | 'update_goal' | 'chat_prompt';
+        payload?: any;
         label: string;
     }[];
 }

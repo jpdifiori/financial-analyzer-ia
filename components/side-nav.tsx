@@ -9,55 +9,60 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+import { useLanguage } from "@/context/language-context";
+
 interface NavItem {
     id: string;
-    label: string;
+    labelKey: string;
     icon: any;
-    category?: string;
+    categoryKey: string;
     href?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-    { id: "dashboard", label: "Resumen", icon: LayoutDashboard, category: "Core" },
-    { id: "balance", label: "Balance", icon: Scale, category: "Core" },
-    { id: "card", label: "Tarjeta (PDF)", icon: CreditCard, category: "Core" },
+    { id: "dashboard", labelKey: "finance.nav.dashboard", icon: LayoutDashboard, categoryKey: "Core" },
+    { id: "balance", labelKey: "finance.nav.balance", icon: Scale, categoryKey: "Core" },
 
-    { id: "income", label: "Ingresos", icon: ArrowDownToDot, category: "Tracking" },
-    { id: "fixed", label: "Fijos", icon: TrendingDown, category: "Tracking" },
-    { id: "variable", label: "Variables", icon: ShoppingBag, category: "Tracking" },
+    { id: "card", labelKey: "finance.nav.card", icon: CreditCard, categoryKey: "Tracking" },
+    { id: "income", labelKey: "finance.nav.income", icon: ArrowDownToDot, categoryKey: "Tracking" },
+    { id: "fixed", labelKey: "finance.nav.fixed", icon: TrendingDown, categoryKey: "Tracking" },
+    { id: "variable", labelKey: "finance.nav.variable", icon: ShoppingBag, categoryKey: "Tracking" },
 
-    { id: "budget", label: "Presupuestos", icon: Target, category: "Planning" },
-    { id: "goals", label: "Metas", icon: Rocket, category: "Planning" },
-    { id: "networth", label: "Patrimonio", icon: LineChart, category: "Planning" },
+    { id: "budget", labelKey: "finance.nav.budget", icon: Target, categoryKey: "Planning" },
+    { id: "goals", labelKey: "finance.nav.goals", icon: Rocket, categoryKey: "Planning" },
 
-    { id: "partner", label: "Socios", icon: Users, category: "Social" },
-    { id: "audit", label: "Auditoría", icon: Shield, category: "Social", href: "/audit" },
-    { id: "coach", label: "Coach IA", icon: Brain, category: "Social", href: "/coach" },
+    { id: "partner", labelKey: "finance.nav.partner", icon: Users, categoryKey: "Social" },
 ];
 
 interface SideNavProps {
     activeTab: string;
     setActiveTab: (id: any) => void;
-    onLogout: () => void;
+    onLogout?: () => void;
     userEmail?: string;
 }
 
 export function SideNav({ activeTab, setActiveTab, onLogout, userEmail }: SideNavProps) {
+    const { t } = useLanguage();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    const categories = Array.from(new Set(NAV_ITEMS.map(i => i.category)));
+    const categories = Array.from(new Set(NAV_ITEMS.map(i => i.categoryKey)));
 
     const renderLink = (item: NavItem) => {
         const isActive = activeTab === item.id;
+        const label = t(item.labelKey);
 
         const content = (
             <>
-                <item.icon className={cn("h-5 w-5 transition-colors", isActive ? "text-orange-500" : "text-slate-400 group-hover:text-slate-200")} />
-                <span className="font-medium">{item.label}</span>
+                <item.icon className={cn("h-5 w-5 transition-all duration-300",
+                    isActive ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" : "text-slate-500 group-hover:text-slate-300"
+                )} />
+                <span className={cn("font-sans font-medium text-sm tracking-wide transition-colors duration-300",
+                    isActive ? "text-cyan-50 font-bold" : "text-slate-400 group-hover:text-slate-200"
+                )}>{label}</span>
                 {isActive && (
                     <motion.div
                         layoutId="active-pill"
-                        className="absolute left-0 w-1 h-6 bg-orange-500 rounded-r-full"
+                        className="absolute right-0 w-1 h-8 bg-cyan-400 rounded-l-full shadow-[0_0_15px_rgba(34,211,238,0.6)]"
                     />
                 )}
             </>
@@ -68,7 +73,7 @@ export function SideNav({ activeTab, setActiveTab, onLogout, userEmail }: SideNa
                 <a
                     key={item.id}
                     href={item.href}
-                    className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all group relative"
+                    className="flex items-center gap-4 px-6 py-3 transition-all group relative"
                 >
                     {content}
                 </a>
@@ -83,8 +88,10 @@ export function SideNav({ activeTab, setActiveTab, onLogout, userEmail }: SideNa
                     setIsMobileMenuOpen(false);
                 }}
                 className={cn(
-                    "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all group relative",
-                    isActive ? "bg-orange-500/10 text-white" : "text-slate-400 hover:text-white hover:bg-white/5"
+                    "w-full flex items-center gap-4 px-6 py-3 transition-all group relative",
+                    isActive
+                        ? "bg-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] border-y border-transparent" // Glass active state
+                        : "hover:bg-white/5"
                 )}
             >
                 {content}
@@ -94,56 +101,55 @@ export function SideNav({ activeTab, setActiveTab, onLogout, userEmail }: SideNa
 
     return (
         <>
-            {/* Mobile Header */}
-            <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 z-40 flex items-center justify-between px-4">
-                <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 bg-gradient-to-tr from-orange-600 to-amber-400 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-orange-900/20">
-                        A
-                    </div>
-                    <span className="font-bold text-white tracking-tight">Analizador IA</span>
-                </div>
-                <button
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    className="p-2 text-slate-400 hover:text-white"
-                >
-                    {isMobileMenuOpen ? <X /> : <Menu />}
-                </button>
-            </div>
+            {/* Mobile Toggle Button (Mini) */}
+            <button
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="lg:hidden fixed top-20 left-4 z-40 h-10 w-10 bg-slate-900/80 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center text-slate-200 shadow-xl"
+            >
+                <Menu className="h-5 w-5" />
+            </button>
 
-            {/* Desktop Sidebar */}
-            <aside className="hidden lg:flex flex-col w-64 bg-slate-950 border-r border-white/5 h-screen sticky top-0 overflow-y-auto p-4 custom-scrollbar">
-                <div className="flex items-center gap-3 mb-10 px-2 pt-2">
-                    <div className="h-10 w-10 bg-gradient-to-tr from-orange-600 to-amber-400 rounded-xl flex items-center justify-center font-black text-white text-xl shadow-xl shadow-orange-900/40">
-                        A
+            {/* Desktop Sidebar - Aurora Glass */}
+            <aside className="hidden lg:flex flex-col w-72 bg-slate-950 border-r border-white/5 h-screen sticky top-0 overflow-y-auto p-6 scrollbar-hide relative z-20">
+                {/* Subtle Gradient for Sidebar */}
+                <div className="absolute inset-0 bg-gradient-to-b from-slate-900/50 to-transparent pointer-events-none" />
+
+                <div className="relative z-10 flex items-center gap-3 mb-12 px-2">
+                    <div className="h-10 w-10 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center font-black text-white text-xl shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+                        F
                     </div>
                     <div>
-                        <h1 className="font-black text-white tracking-tighter text-lg leading-none">ANALIZADOR</h1>
-                        <p className="text-[10px] text-orange-500 font-bold tracking-widest uppercase">Finanzas IA</p>
+                        <h1 className="font-sans font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight text-lg leading-none uppercase">
+                            {t("finance.title") || "FINANZAS"}
+                        </h1>
+                        <p className="text-[10px] text-cyan-400 font-bold tracking-[0.2em] uppercase mt-1 glow-sm">Aurora Engine</p>
                     </div>
                 </div>
 
-                <div className="flex-1 space-y-8">
+                <div className="relative z-10 flex-1 space-y-10">
                     {categories.map(cat => (
-                        <div key={cat} className="space-y-1">
-                            <h3 className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">{cat}</h3>
-                            {NAV_ITEMS.filter(i => i.category === cat).map(item => renderLink(item))}
+                        <div key={cat} className="space-y-2">
+                            <h3 className="px-6 text-[10px] font-black text-slate-600 uppercase tracking-[0.25em] mb-4">
+                                {cat}
+                            </h3>
+                            <div className="space-y-1">
+                                {NAV_ITEMS.filter(i => i.categoryKey === cat).map(item => renderLink(item))}
+                            </div>
                         </div>
                     ))}
                 </div>
 
-                <div className="mt-10 pt-6 border-t border-white/5 space-y-4">
-                    <div className="px-4">
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Usuario</p>
-                        <p className="text-sm text-slate-300 truncate font-medium">{userEmail}</p>
+                {onLogout && (
+                    <div className="relative z-10 mt-12 pt-8 border-t border-white/5">
+                        <button
+                            onClick={onLogout}
+                            className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl bg-white/5 border border-white/5 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all font-bold text-[10px] uppercase tracking-widest shadow-lg"
+                        >
+                            <LogOut className="h-4 w-4" />
+                            {t("common.logout") || "Cerrar Sesión"}
+                        </button>
                     </div>
-                    <button
-                        onClick={onLogout}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-all font-medium"
-                    >
-                        <LogOut className="h-5 w-5" />
-                        Cerrar Sesión
-                    </button>
-                </div>
+                )}
             </aside>
 
             {/* Mobile Drawer */}
@@ -155,39 +161,48 @@ export function SideNav({ activeTab, setActiveTab, onLogout, userEmail }: SideNa
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={() => setIsMobileMenuOpen(false)}
-                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] lg:hidden"
                         />
                         <motion.div
                             initial={{ x: "-100%" }}
                             animate={{ x: 0 }}
                             exit={{ x: "-100%" }}
                             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                            className="fixed inset-y-0 left-0 w-[280px] bg-slate-950 z-50 lg:hidden flex flex-col p-4 shadow-2xl"
+                            className="fixed inset-y-0 left-0 w-[85%] max-w-sm bg-slate-950 border-r border-white/10 z-[70] lg:hidden flex flex-col p-8 shadow-2xl overflow-y-auto"
                         >
-                            <div className="flex items-center justify-between mb-8 px-2">
-                                <div className="flex items-center gap-2">
-                                    <div className="h-8 w-8 bg-orange-600 rounded-lg flex items-center justify-center font-bold text-white">A</div>
-                                    <span className="font-bold text-white">Menu</span>
+                            <div className="flex items-center justify-between mb-12">
+                                <div className="flex items-center gap-4">
+                                    <div className="h-10 w-10 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center font-black text-white text-xl">F</div>
+                                    <span className="font-sans font-black text-white tracking-tight text-lg uppercase">FINANZAS</span>
                                 </div>
-                                <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400"><X /></button>
+                                <button
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 hover:bg-white/10"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto space-y-8 custom-scrollbar">
+                            <div className="flex-1 space-y-10 scrollbar-hide">
                                 {categories.map(cat => (
-                                    <div key={cat} className="space-y-1">
-                                        <h3 className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{cat}</h3>
-                                        {NAV_ITEMS.filter(i => i.category === cat).map(item => renderLink(item))}
+                                    <div key={cat} className="space-y-2">
+                                        <h3 className="px-6 text-[10px] font-black text-slate-600 uppercase tracking-widest mb-4">{cat}</h3>
+                                        <div className="space-y-1">
+                                            {NAV_ITEMS.filter(i => i.categoryKey === cat).map(item => renderLink(item))}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
 
-                            <button
-                                onClick={onLogout}
-                                className="mt-8 flex items-center gap-3 px-4 py-4 rounded-2xl bg-red-500/10 text-red-400 transition-all font-bold text-sm"
-                            >
-                                <LogOut className="h-5 w-5" />
-                                Cerrar Sesión
-                            </button>
+                            {onLogout && (
+                                <button
+                                    onClick={onLogout}
+                                    className="mt-12 flex items-center gap-4 px-6 py-5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 transition-all font-bold text-xs uppercase tracking-widest"
+                                >
+                                    <LogOut className="h-5 w-5" />
+                                    Cerrar Sesión
+                                </button>
+                            )}
                         </motion.div>
                     </>
                 )}

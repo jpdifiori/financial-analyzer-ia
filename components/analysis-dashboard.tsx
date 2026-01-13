@@ -10,7 +10,12 @@ import { GhostExpensesList } from "./ghost-expenses-list";
 interface AnalysisResult {
     summary: {
         total_pay: number;
+        total_ars?: number;
+        total_usd?: number;
         min_pay: number;
+        previous_balance?: number; // Saldo Anterior
+        total_payments?: number; // Pagos realizados
+        payment_date?: string; // Fecha de pago
         currency: string;
         due_date: string;
         closing_date: string;
@@ -24,12 +29,20 @@ interface AnalysisResult {
         description: string;
         current_installment: number;
         total_installments: number;
-        amount: number;
+        installment_amount: number;
         remaining_amount: number;
+        currency?: string;
     }[];
-    categories: { name: string; amount: number; percentage: number }[];
-    ghost_expenses: { description: string; amount: number; date: string; frequency: string }[];
+    categories: { name: string; amount: number; percentage: number; currency?: string }[];
+    ghost_expenses: { description: string; amount: number; date: string; frequency: string; currency?: string; }[];
     financial_insights: string[];
+    interest_alert?: {
+        detected: boolean;
+        amount: number;
+        currency: string;
+        reason: string;
+        description: string;
+    };
 }
 
 interface AnalysisDashboardProps {
@@ -39,8 +52,8 @@ interface AnalysisDashboardProps {
 export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
 
     // Helper for currency format
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: data.summary.currency || 'USD' }).format(amount);
+    const formatCurrency = (amount: number, currencyCode?: string) => {
+        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: currencyCode || data.summary.currency || 'ARS' }).format(amount);
     };
 
     const generatePDF = () => {
@@ -50,17 +63,28 @@ export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
 
         doc.setFontSize(14);
         doc.text(`Total: ${formatCurrency(data.summary.total_pay)}`, 20, 40);
-        doc.text(`Vencimiento: ${data.summary.due_date}`, 20, 50);
+        if (data.summary.total_ars) doc.text(`Total Pesos: ${formatCurrency(data.summary.total_ars, 'ARS')}`, 20, 46);
+        if (data.summary.total_usd) doc.text(`Total Dólares: ${formatCurrency(data.summary.total_usd, 'USD')}`, 100, 46);
+
+        doc.text(`Vencimiento: ${data.summary.due_date}`, 20, 60);
 
         if (data.summary.bank_name) {
-            doc.text(`Tarjeta: ${data.summary.bank_name} - ${data.summary.card_issuer}`, 20, 60);
+            doc.text(`Tarjeta: ${data.summary.bank_name} - ${data.summary.card_issuer}`, 20, 70);
         }
 
-        doc.text("Cuotas / Playazos:", 20, 80);
-        let y = 90;
+        // Warning in PDF
+        if (data.interest_alert?.detected) {
+            doc.setTextColor(220, 38, 38); // Red
+            doc.text(`ALERTA: Se detectaron intereses por ${formatCurrency(data.interest_alert.amount, data.interest_alert.currency)} (${data.interest_alert.reason})`, 20, 80);
+            doc.setTextColor(0, 0, 0); // Black
+        }
+
+        doc.text("Cuotas / Playazos:", 20, 90);
+        let y = 100;
         data.installments.forEach(ins => {
             doc.setFontSize(10);
-            doc.text(`${ins.description} (${ins.current_installment}/${ins.total_installments}) - ${formatCurrency(ins.amount)}`, 20, y);
+            const curr = ins.currency || 'ARS';
+            doc.text(`${ins.description} (${ins.current_installment}/${ins.total_installments}) - ${formatCurrency(ins.installment_amount, curr)}`, 20, y);
             y += 8;
         });
 
@@ -70,43 +94,86 @@ export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
         y += 10;
         data.ghost_expenses.forEach(g => {
             doc.setFontSize(10);
-            doc.text(`${g.description} - ${formatCurrency(g.amount)}`, 20, y);
+            const curr = g.currency || 'ARS';
+            doc.text(`${g.description} - ${formatCurrency(g.amount, curr)}`, 20, y);
             y += 8;
         });
 
         doc.save("analisis-financiero-completo.pdf");
     };
 
-    // Simple SVG Donut Chart Logic
-    const calculateDonutSegments = () => {
-        let cumulativePercent = 0;
-        return data.categories.map((cat, index) => {
-            const startX = Math.cos(2 * Math.PI * cumulativePercent);
-            const startY = Math.sin(2 * Math.PI * cumulativePercent);
-            cumulativePercent += cat.percentage / 100;
-            const endX = Math.cos(2 * Math.PI * cumulativePercent);
-            const endY = Math.sin(2 * Math.PI * cumulativePercent);
-
-            const largeArcFlag = cat.percentage > 50 ? 1 : 0;
-
-            const pathData = [
-                `M 0 0`,
-                `L ${startX} ${startY}`,
-                `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
-                `Z`
-            ].join(' ');
-
-            return { path: pathData, color: `hsl(${index * 60 + 200}, 70%, 50%)`, name: cat.name, percent: cat.percentage };
-        });
-    };
-
-    // Note: Creating a robust SVG chart from scratch in React is wordy. 
-    // I'll stick to a clean CSS bar layout for reliability if the SVG math gets tricky, 
-    // but a bar chart is often friendlier for this data than a donut. 
-    // Let's use clean colored progress bars for categories, it's safer and looks great.
+    // Simple SVG Donut Chart Logic... (omitted for brevity, keep existing comments if needed)
 
     return (
         <div className="space-y-8 w-full max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-5 duration-700 pb-20">
+
+            {/* Payment Analysis - New Feature */}
+            {(data.summary.previous_balance !== undefined && data.summary.total_payments !== undefined) && (
+                <div className="mb-8">
+                    <Card className="bg-white border-2 border-slate-100 shadow-lg overflow-hidden relative">
+                        <div className="absolute top-0 left-0 w-2 h-full bg-blue-600" />
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <TrendingDown className="h-5 w-5 text-blue-600" /> Análisis de Pago Anterior
+                            </CardTitle>
+                            <CardDescription>Comportamiento de pago del último período cerrado</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+                                {/* Balance vs Payment */}
+                                <div className="space-y-2 col-span-2">
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Deuda Anterior</p>
+                                            <p className="text-2xl font-mono font-bold text-slate-900">{formatCurrency(data.summary.previous_balance)}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Pago Realizado</p>
+                                            <p className={cn("text-2xl font-mono font-bold",
+                                                data.summary.total_payments >= data.summary.previous_balance ? "text-emerald-600" : "text-orange-500"
+                                            )}>
+                                                {formatCurrency(data.summary.total_payments)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {/* Progress Bar */}
+                                    <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                        <div
+                                            className={cn("h-full transition-all duration-1000",
+                                                data.summary.total_payments >= data.summary.previous_balance ? "bg-emerald-500" : "bg-orange-400"
+                                            )}
+                                            style={{ width: `${Math.min((data.summary.total_payments / data.summary.previous_balance) * 100, 100)}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-xs text-slate-400 font-mono">
+                                        <span>Cobertura: {Math.round((data.summary.total_payments / data.summary.previous_balance) * 100)}%</span>
+                                        {data.summary.payment_date && <span>Fecha de Pago: {data.summary.payment_date}</span>}
+                                    </div>
+                                </div>
+
+                                {/* Interest & Status */}
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center h-full">
+                                    {data.interest_alert?.detected ? (
+                                        <>
+                                            <div className="bg-red-100 p-2 rounded-full mb-2"><AlertTriangle className="h-6 w-6 text-red-600" /></div>
+                                            <p className="text-xs text-red-700 font-bold uppercase">Intereses Pagados</p>
+                                            <p className="text-xl font-mono font-black text-red-600">{formatCurrency(data.interest_alert.amount, data.interest_alert.currency)}</p>
+                                            <p className="text-[10px] text-red-500 mt-1 max-w-[150px] leading-tight">{data.interest_alert.reason}</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="bg-emerald-100 p-2 rounded-full mb-2"><Calendar className="h-6 w-6 text-emerald-600" /></div>
+                                            <p className="text-xs text-emerald-700 font-bold uppercase">Estado de Cuenta</p>
+                                            <p className="text-lg font-bold text-emerald-600">Al Día</p>
+                                            <p className="text-[10px] text-emerald-500 mt-1">Sin intereses detectados</p>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {/* Header / Summary Cards */}
             <div className="grid gap-4 md:grid-cols-4">
@@ -115,8 +182,20 @@ export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
                         <CardTitle className="text-sm font-medium text-slate-300">Total a Pagar</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold">{formatCurrency(data.summary.total_pay)}</div>
-                        <div className="text-xs text-slate-400 mt-1 flex flex-col gap-1">
+                        <div className="flex flex-col gap-1">
+                            {data.summary.total_ars !== undefined && (
+                                <div className="text-2xl font-bold text-white">{formatCurrency(data.summary.total_ars || 0, 'ARS')}</div>
+                            )}
+                            {data.summary.total_usd !== undefined && data.summary.total_usd > 0 && (
+                                <div className="text-xl font-bold text-emerald-400">{formatCurrency(data.summary.total_usd || 0, 'USD')}</div>
+                            )}
+                            {/* Fallback if separated totals missing */}
+                            {!data.summary.total_ars && !data.summary.total_usd && (
+                                <div className="text-3xl font-bold">{formatCurrency(data.summary.total_pay)}</div>
+                            )}
+                        </div>
+
+                        <div className="text-xs text-slate-400 mt-2 flex flex-col gap-1">
                             <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Vence: {data.summary.due_date}</span>
                             {data.summary.bank_name && (
                                 <span className="font-semibold text-orange-400">
@@ -132,7 +211,7 @@ export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
                         <CardTitle className="text-sm font-medium text-gray-500">Pago Mínimo</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-orange-600">{formatCurrency(data.summary.min_pay)}</div>
+                        <div className="text-2xl font-bold text-orange-600">{formatCurrency(data.summary.min_pay || 0)}</div>
                         <div className="text-xs text-gray-400 mt-1">Interés est: {data.summary.interest_rate || "N/A"}</div>
                     </CardContent>
                 </Card>
@@ -158,8 +237,26 @@ export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
                 </Card>
             </div>
 
+            {/* Interest Warning Banner */}
+            {data.interest_alert?.detected && (
+                <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex gap-4 animate-pulse">
+                    <div className="bg-red-100 p-3 rounded-full h-fit">
+                        <AlertTriangle className="h-6 w-6 text-red-600" />
+                    </div>
+                    <div>
+                        <h3 className="text-red-900 font-bold text-lg">¡Alerta Financiera Detectada!</h3>
+                        <p className="text-red-700">
+                            Detectamos un cargo por <strong>{data.interest_alert.reason}</strong> de <span className="font-bold text-xl">{formatCurrency(data.interest_alert.amount, data.interest_alert.currency)}</span>.
+                        </p>
+                        <p className="text-red-600 text-sm mt-1">
+                            Esto suele ocurrir por pagar el mínimo o fuera de término. ¡Evita regalar dinero al banco!
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Insights Banner */}
-            {data.financial_insights.length > 0 && (
+            {data.financial_insights?.length > 0 && (
                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex gap-3 text-indigo-900 text-sm">
                     <AlertTriangle className="h-5 w-5 text-indigo-600 shrink-0" />
                     <ul className="list-disc pl-4 space-y-1">
@@ -168,40 +265,53 @@ export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
                 </div>
             )}
 
-            <div className="grid gap-8 md:grid-cols-2">
-                {/* Categories Chart */}
-                <Card className="md:col-span-1">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <PieChart className="h-5 w-5" /> Distribución de Gastos
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-5">
-                            {data.categories.map((cat, idx) => (
-                                <div key={idx} className="space-y-1">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="font-medium text-gray-700">{cat.name}</span>
-                                        <span className="text-gray-500">{cat.percentage}% ({formatCurrency(cat.amount)})</span>
+            {/* Categories and Ghost Expenses */}
+            <div className="space-y-10">
+                {/* Categories Cards */}
+                <div className="space-y-4">
+
+                    <h3 className="text-lg font-serif italic text-slate-700 flex items-center gap-2">
+                        <PieChart className="h-5 w-5" /> Distribución del Gasto
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {data.categories.map((cat, idx) => (
+                            <Card key={idx} className="bg-slate-50 border-2 border-slate-200 shadow-md hover:shadow-xl hover:bg-white hover:border-emerald-500/30 transition-all duration-300 group overflow-hidden cursor-default">
+                                <CardHeader className="pb-2 relative z-10">
+                                    <div className="flex justify-between items-center">
+                                        <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-500">{cat.name}</CardTitle>
+                                        <div className={cn("h-2 w-2 rounded-full", idx === 0 ? "bg-emerald-500" : idx === 1 ? "bg-blue-500" : idx === 2 ? "bg-violet-500" : "bg-orange-400")} />
                                     </div>
-                                    <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                                        <div
-                                            className={cn("h-full rounded-full transition-all duration-1000 ease-out",
-                                                idx === 0 ? "bg-blue-500" :
-                                                    idx === 1 ? "bg-violet-500" :
-                                                        idx === 2 ? "bg-emerald-500" : "bg-orange-400"
-                                            )}
-                                            style={{ width: `${cat.percentage}%` }}
-                                        />
+                                </CardHeader>
+                                <CardContent className="relative z-10">
+                                    <div className="text-3xl font-mono font-black text-slate-900 mb-4 tracking-tighter">{formatCurrency(cat.amount, cat.currency)}</div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-2 flex-1 bg-slate-200 rounded-full overflow-hidden">
+                                            <div
+                                                className={cn("h-full rounded-full transition-all duration-1000",
+                                                    idx === 0 ? "bg-emerald-500" :
+                                                        idx === 1 ? "bg-blue-500" :
+                                                            idx === 2 ? "bg-violet-500" : "bg-orange-400"
+                                                )}
+                                                style={{ width: `${cat.percentage}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-xs font-mono font-bold text-slate-500">{cat.percentage}%</span>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
+                                </CardContent>
+                                {/* Stronger decorative gradient */}
+                                <div className={cn("absolute -right-6 -top-6 h-24 w-24 rounded-full blur-[40px] opacity-10 group-hover:opacity-30 transition-opacity duration-500",
+                                    idx === 0 ? "bg-emerald-500" :
+                                        idx === 1 ? "bg-blue-500" :
+                                            idx === 2 ? "bg-violet-500" : "bg-orange-400"
+                                )} />
+                            </Card>
+                        ))}
+                    </div>
+
+                </div>
 
                 {/* Ghost Expenses */}
-                <div className="md:col-span-1">
+                <div>
                     <GhostExpensesList expenses={data.ghost_expenses} currency={data.summary.currency} />
                 </div>
             </div>
@@ -226,24 +336,26 @@ export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {data.installments.map((ins, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50/50">
-                                        <td className="px-4 py-3 font-medium">{ins.description}</td>
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs w-10">{ins.current_installment} / {ins.total_installments}</span>
-                                                <div className="w-20 bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="bg-slate-800 h-full rounded-full"
-                                                        style={{ width: `${(ins.current_installment / ins.total_installments) * 100}%` }}
-                                                    />
+                                {data.installments
+                                    .filter(ins => ins.current_installment < ins.total_installments)
+                                    .map((ins, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50/50">
+                                            <td className="px-4 py-3 font-medium">{ins.description}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs w-10">{ins.current_installment} / {ins.total_installments}</span>
+                                                    <div className="w-20 bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="bg-slate-800 h-full rounded-full"
+                                                            style={{ width: `${(ins.current_installment / ins.total_installments) * 100}%` }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3">{formatCurrency(ins.amount)}</td>
-                                        <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(ins.remaining_amount)}</td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="px-4 py-3">{formatCurrency(ins.installment_amount, ins.currency)}</td>
+                                            <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(ins.remaining_amount, ins.currency)}</td>
+                                        </tr>
+                                    ))}
                             </tbody>
                         </table>
                         {data.installments.length === 0 && (

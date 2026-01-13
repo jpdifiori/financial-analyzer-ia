@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, X, Send, Sparkles, TrendingDown, ShoppingCart, Target, PiggyBank, BarChart3, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePathname } from "next/navigation";
 
 const STRATEGIES = [
     { id: "debts", label: "📉 Estrategia de Deudas", prompt: "Quiero armar una estrategia para pagar mis deudas." },
@@ -19,12 +20,16 @@ export function FinancialAdvisorChat() {
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const pathname = usePathname();
 
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [messages]);
+
+    // Do not show on challenges or journal pages
+    if (pathname?.includes("/challenges") || pathname?.includes("/journal")) return null;
 
     const handleSend = async (content: string) => {
         if (!content.trim()) return;

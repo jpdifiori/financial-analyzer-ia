@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Loader2, TrendingUp, ShieldCheck, AlertTriangle } from "lucide-react";
 import { BatchUpload } from "@/components/batch-upload";
 import { AuditDashboard } from "@/components/audit-dashboard";
+import { toast } from "sonner";
 
 export default function AuditPage() {
     const [cards, setCards] = useState<any[]>([]);
@@ -30,7 +31,7 @@ export default function AuditPage() {
 
     const handleBatchAudit = async (files: { file: File, base64: string }[]) => {
         if (!selectedCard) {
-            alert("Seleccioná una tarjeta primero.");
+            toast.error("Seleccioná una tarjeta primero.");
             return;
         }
 

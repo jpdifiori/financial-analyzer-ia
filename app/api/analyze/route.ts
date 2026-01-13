@@ -11,45 +11,48 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
 
-    // 1. Validate Payment
-    let paid = db.hasPaid(sessionId);
-    if (!paid) {
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
-      if (session.payment_status === "paid") {
-        db.addPaidSession(sessionId);
-        paid = true;
-      }
-    }
-    if (!paid) {
-      return NextResponse.json({ error: "Pago no verificado. Por favor realiza el pago." }, { status: 403 });
-    }
+    // 1. Validate Payment - DISABLED BY USER REQUEST
+    // const paid = true; 
 
     // 2. Gemini Analysis
     const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, "");
 
     const prompt = `
-    Actúa como un Auditor Financiero Senior. Analiza este resumen de tarjeta de crédito y extrae la siguiente información detallada en formato JSON estricto.
+    Actúa como un Auditor Financiero Senior especializado en economía doméstica. Analiza este resumen de tarjeta de crédito y extrae la información siguiendo estrictos principios de "Doble Impacto".
+
+    PRINCIPIOS OBLIGATORIOS:
+    1. Gasto del Mes (Cash Flow): La cuota que se paga ESTE mes es un gasto.
+    2. Deuda Patrimonial (Pasivo): El total restante de una compra en cuotas es deuda.
     
     Estructura JSON requerida:
     {
       "summary": {
-        "bank_name": "string" (Nombre del Banco, ej: Santander, Galicia, BBVA),
-        "card_issuer": "string" (Visa, Mastercard, Amex),
-        "card_last_4": "string" (Últimos 4 dígitos si están visibles, o null),
-        "total_pay": number,
-        "min_pay": number,
-        "currency": "string" (ARS/USD),
-        "due_date": "YYYY-MM-DD" (Formato ISO),
-        "closing_date": "YYYY-MM-DD" (Formato ISO),
-        "period": "YYYY-MM" (Mes y año del resumen, ej: 2024-05)
+        "bank_name": "string",
+        "card_issuer": "string",
+        "card_last_4": "string",
+        "total_pay": number, 
+        "total_ars": number, 
+        "total_usd": number, 
+        "min_pay": number, 
+        "previous_balance": number, // Saldo Anterior
+        "total_payments": number, // Pagos realizados durante el período
+        "payment_date": "YYYY-MM-DD", // Fecha en que se realizó el pago del resumen anterior
+        "interest_rate": "string", 
+        "period": "YYYY-MM",
+        "closing_date": "YYYY-MM-DD"
       },
       "items": [
         {
            "date": "YYYY-MM-DD",
-           "description": "string" (Nombre del comercio),
-           "amount": number,
-           "category": "string" (Sugiere una categoría: Supermercado, Farmacia, Transporte, Servicios, Suscripciones, Comida, Ropa, Otros),
-           "is_fixed": boolean (true si parece un gasto fijo mensual como Netflix, Gimnasio, Seguro)
+           "description": "string",
+           "amount": number, 
+           "currency": "string", 
+           "category": "string",
+           "is_fixed": boolean,
+           "installment_info": { 
+               "current": number,
+               "total": number
+           }
         }
       ],
       "installments": [ 
@@ -57,35 +60,48 @@ export async function POST(req: Request) {
           "description": "string", 
           "current_installment": number,
           "total_installments": number,
-          "amount": number,
-          "remaining_amount": number
+          "total_amount": number, 
+          "remaining_amount": number,
+          "installment_amount": number, 
+          "currency": "string" 
         }
       ],
-      "categories": [
-        { "name": "string", "amount": number, "percentage": number }
-      ],
+      "categories": [ { "name": "string", "amount": number, "currency": "string" } ],
       "ghost_expenses": [
         { 
           "description": "string", 
           "amount": number, 
+          "currency": "string", 
           "date": "string",
-          "frequency": "string" (Estimado: Mensual, Bimestral, Anual, Único)
+          "frequency": "string"
         }
       ],
-      "financial_insights": [ "string" ]
+      "interest_alert": {
+          "detected": boolean,
+          "amount": number,
+          "currency": "string",
+          "reason": "string", 
+          "description": "string" 
+      }
     }
     
-    IMPORTANTE:
-    - Extrae CADA transacción individual en el array "items".
-    - Normaliza las fechas a YYYY-MM-DD.
-    - Clasifica inteligentemente cada item.
-    - Identifica claramente el BANCO y la EMISORA de la tarjeta.
-    - IMPORTANTE SOBRE TARJETAS:
-      - Busca explícitamente el nombre del banco (ej: Galicia, Santander, BBVA, Macro, ICBC). Si no es obvio, busca en los logos, encabezados o pies de página.
-      - Busca la emisora (Visa, Mastercard, American Express).
-      - Busca los últimos 4 dígitos de la tarjeta (ej: XXXX-XXXX-XXXX-1234 o terminada en 1234). Si no los encuentras, devuelve null, pero ESFUÉRZATE en buscarlos.
-      - Si hay múltiples tarjetas, toma la principal o la del titular.
-      - Normaliza los nombres: "Banco Galicia" -> "Galicia", "Visa Platinum" -> "Visa".
+    INSTRUCCIONES CRÍTICAS:
+    - DETECCIÓN DE PAGOS ANTERIORES:
+      - Busca "Su pago", "Pago", "Pagos", "Saldo Anterior".
+      - Identifica cuánto debía antes (previous_balance) y cuánto pagó (total_payments).
+      - Identifica la fecha de ese pago (payment_date).
+    - DETECCIÓN DE INTERESES (CRÍTICO):
+      - Busca ítems con palabras clave: "INTERES", "FINANCIACION", "PUNITORIOS", "MORA", "REFINANCIACION".
+      - Si encuentras alguno, marca "interest_alert.detected" = true y extrae el monto y la razón.
+      - Esto es vital para advertir al usuario sobre costos financieros.
+    - IDENTIFICACIÓN DE MONEDA:
+      - Si ves "USD", "U$S", "US$", o deuda en dólares -> currency: "USD".
+      - Si ves "$", "ARS", o deuda en pesos -> currency: "ARS".
+    - Si ves "Compra TV 10/12 $10.000 (Total $120.000)":
+      -> En "items": Pones $10.000 (es el gasto de hoy) con currency ARS.
+      -> En "installments": Pones remaining_amount: $20.000 con currency ARS.
+    - Identifica banco, emisora y últimos 4 dígitos.
+    - Normaliza fechas a YYYY-MM-DD.
     `;
 
     // Lazy load model

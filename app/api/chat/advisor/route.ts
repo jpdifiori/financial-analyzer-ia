@@ -1,12 +1,22 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
 export async function POST(req: Request) {
     console.log("Advisor API: Request received");
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+        console.error("Advisor API: GEMINI_API_KEY is missing in environment variables");
+        return NextResponse.json({
+            error: "Configuración incompleta",
+            details: "La clave de API de Gemini no está configurada en .env.local"
+        }, { status: 500 });
+    }
+
     try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
         const body = await req.json();
         const { messages, context } = body;
 
@@ -15,8 +25,15 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Mensajes inválidos" }, { status: 400 });
         }
 
-        const systemPrompt = `Eres un Asesor Financiero experto y proactivo. 
-        Tu objetivo es ayudar al usuario a mejorar su salud financiera.
+        const systemPrompt = `Eres un Asesor Financiero experto, proactivo y altamente interactivo. 
+        Tu objetivo es ayudar al usuario a mejorar su salud financiera de forma progresiva.
+
+        ESTILO DE CONVERSACIÓN:
+        1. **Una pregunta a la vez**: NUNCA hagas múltiples preguntas en un solo mensaje. 
+        2. **Interacciones Cortas**: Sé breve y directo. No abrumes al usuario con párrafos largos o listas extensas.
+        3. **Recolección Progresiva**: Ve pidiendo información poco a poco. Permite que el usuario te cuente su situación en pasos.
+        4. **Acción**: Si detectas una oportunidad de ahorro o mejora, menciónala brevemente y pregunta si el usuario quiere profundizar en eso.
+
         REGLAS ESTRICTAS:
         1. Solo puedes hablar de temas FINANCIEROS (deudas, ahorro, inversión, compras, presupuesto).
         2. Si el usuario pregunta algo no financiero, debes decir: "Lo siento, como tu asesor financiero solo puedo ayudarte con temas relacionados a tu dinero y economía. ¿Te gustaría analizar una compra o ver una estrategia de deudas?".
@@ -25,6 +42,8 @@ export async function POST(req: Request) {
         
         CONTEXTO DEL USUARIO (si está disponible):
         ${JSON.stringify(context || {})}
+        
+        IMPORTANTE: No te presentes de nuevo si ya hay historial. Empieza directamente con el análisis o la pregunta siguiente.
         `;
 
         console.log("Advisor API: Starting chat with Gemini");

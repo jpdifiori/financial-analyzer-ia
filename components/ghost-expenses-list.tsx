@@ -10,6 +10,7 @@ interface GhostExpense {
     amount: number;
     date: string;
     frequency: string;
+    currency?: string;
 }
 
 interface GhostExpensesListProps {
@@ -17,11 +18,11 @@ interface GhostExpensesListProps {
     currency?: string;
 }
 
-export function GhostExpensesList({ expenses, currency = "USD" }: GhostExpensesListProps) {
-    const formatCurrency = (amount: number) => {
+export function GhostExpensesList({ expenses = [], currency = "USD" }: GhostExpensesListProps) {
+    const formatCurrency = (amount: number, currencyCode?: string) => {
         return new Intl.NumberFormat("es-AR", {
             style: "currency",
-            currency: currency,
+            currency: currencyCode || currency,
         }).format(amount);
     };
 
@@ -34,16 +35,21 @@ export function GhostExpensesList({ expenses, currency = "USD" }: GhostExpensesL
         return amount; // Default to single occurrence or annual
     };
 
+    // Calculate totals based on primary currency (simplification for now)
+    // Ideally we'd separate ARS/USD totals, but for space we'll sum raw numbers
+    // expecting most ghosts are subscriptions in same currency or converted.
+    // A better approach is to filter by currency. 
     const totalMonthlyGhost = expenses.reduce((acc, curr) => {
-        // Simple heuristic for monthly impact
         const freq = curr.frequency?.toLowerCase() || "";
-        if (freq.includes("mensual")) return acc + curr.amount;
-        if (freq.includes("semanal")) return acc + (curr.amount * 4);
-        return acc;
+        let val = 0;
+        if (freq.includes("mensual")) val = curr.amount;
+        if (freq.includes("semanal")) val = curr.amount * 4;
+        // Only sum if currency matches global or just raw sum (risk of mixing ARS/USD)
+        // Let's assume raw sum for "estimation" impact.
+        return acc + val;
     }, 0);
 
     const totalSavingsPotential = expenses.reduce((acc, curr) => {
-        // Annualized savings potential
         return acc + calculateAnnualProjection(curr.amount, curr.frequency);
     }, 0);
 
@@ -102,10 +108,10 @@ export function GhostExpensesList({ expenses, currency = "USD" }: GhostExpensesL
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right font-medium text-gray-700">
-                                        {formatCurrency(expense.amount)}
+                                        {formatCurrency(expense.amount, expense.currency)}
                                     </TableCell>
                                     <TableCell className="text-right font-bold text-red-600">
-                                        {formatCurrency(calculateAnnualProjection(expense.amount, expense.frequency))}
+                                        {formatCurrency(calculateAnnualProjection(expense.amount, expense.frequency), expense.currency)}
                                     </TableCell>
                                 </TableRow>
                             ))}

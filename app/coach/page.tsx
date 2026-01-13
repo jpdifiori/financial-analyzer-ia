@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import { Goal, Task, ChatMessage } from "@/types/coach";
 import { Loader2, Send, CheckCircle2, Circle, Trophy, Target, ListTodo } from "lucide-react";
 
@@ -29,11 +30,14 @@ export default function CoachPage() {
         if (goalsRes.data) setGoals(goalsRes.data);
         if (tasksRes.data) setTasks(tasksRes.data);
 
-        // Initial Greeting
+        // Initial Greeting specialized for Purchase Analysis
         setMessages([{
             role: "assistant",
-            content: "Hola. Soy tu Coach. ¿En qué nos enfocamos hoy?",
-            timestamp: new Date()
+            content: "Hola. Soy tu Asesor Financiero. ¿Tienes alguna compra en mente? Puedo ayudarte a analizar si es el momento ideal y cómo impactaría en tus metas.",
+            timestamp: new Date(),
+            suggestedActions: [
+                { label: "Análisis de posible compra", type: "chat_prompt" }
+            ]
         }]);
 
         setLoading(false);
@@ -109,8 +113,8 @@ export default function CoachPage() {
 
                 {/* Identity / Goals */}
                 <section>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                        <Trophy className="w-4 h-4" /> Identidad & Metas
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2 font-outfit">
+                        <Trophy className="w-3 h-3" /> Metas de Vida
                     </h3>
                     <div className="space-y-3">
                         {goals.length === 0 && <p className="text-sm text-slate-400 italic">No tienes metas activas.</p>}
@@ -151,31 +155,49 @@ export default function CoachPage() {
 
             {/* RIGHT PANEL: Chat Interface */}
             <div className="flex-1 flex flex-col h-full relative">
-                <header className="h-16 border-b bg-white/80 backdrop-blur flex items-center px-6 justify-between z-10">
-                    <h1 className="font-bold text-slate-800 flex items-center gap-2">
-                        <span className="text-2xl">🧠</span> AI Coach
+                <header className="h-14 border-b bg-white/50 backdrop-blur-md flex items-center px-6 justify-between z-10">
+                    <h1 className="font-black text-slate-800 flex items-center gap-2 font-outfit text-sm uppercase tracking-widest">
+                        Intelligence Engine
                     </h1>
-                    <div className="text-xs text-slate-400">Gemini 1.5 Powered</div>
+                    <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active</span>
+                    </div>
                 </header>
 
                 {/* Messages Area */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
                     {messages.map((m, i) => (
-                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 fade-in duration-300`}>
-                            <div className={`max-w-[80%] rounded-2xl p-4 shadow-sm text-sm leading-relaxed
-                                ${m.role === 'user'
-                                    ? 'bg-orange-600 text-white rounded-tr-none'
-                                    : 'bg-white border border-slate-100 text-slate-700 rounded-tl-none'
-                                }`}>
+                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-500`}>
+                            <div className={cn(
+                                "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                                m.role === 'user'
+                                    ? 'bg-slate-900 text-white shadow-sm'
+                                    : 'bg-white border border-slate-200/60 text-slate-700 shadow-sm'
+                            )}>
                                 <div className="whitespace-pre-wrap">{m.content}</div>
 
                                 {/* Render Actions if any */}
                                 {m.suggestedActions && (
-                                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
-                                        <p className="text-xs font-bold opacity-70 mb-1">Acciones sugeridas:</p>
+                                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
                                         {m.suggestedActions.map((act, idx) => (
-                                            <button key={idx} className="block w-full text-left text-xs bg-slate-50 hover:bg-slate-100 p-2 rounded border border-slate-200 transition-colors">
-                                                👉 {act.label}
+                                            <button
+                                                key={idx}
+                                                onClick={() => {
+                                                    if (act.type === 'chat_prompt' || !act.type) {
+                                                        setInput(act.label);
+                                                        // We don't call sendMessage directly to let the user see it 
+                                                        // or we can just send it. Let's send it for speed.
+                                                        const fakeEvent = { preventDefault: () => { } };
+                                                        setTimeout(() => {
+                                                            const sendBtn = document.getElementById('send-coach-msg');
+                                                            sendBtn?.click();
+                                                        }, 100);
+                                                    }
+                                                }}
+                                                className="text-[10px] font-black uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 transition-all"
+                                            >
+                                                {act.label}
                                             </button>
                                         ))}
                                     </div>
@@ -196,27 +218,28 @@ export default function CoachPage() {
                 </div>
 
                 {/* Input Area */}
-                <div className="p-4 bg-white border-t">
-                    <div className="max-w-3xl mx-auto relative">
+                <div className="p-6 bg-white/50 backdrop-blur-md border-t">
+                    <div className="max-w-4xl mx-auto relative group">
                         <textarea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                            placeholder="Escribe tu reflexión, objetivo o tarea..."
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 transition-all resize-none shadow-sm"
+                            placeholder="Mensaje para el Asesor..."
+                            className="w-full bg-white border border-slate-200 rounded-2xl pl-5 pr-14 py-4 focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all resize-none shadow-sm"
                             rows={1}
                         />
                         <button
+                            id="send-coach-msg"
                             onClick={sendMessage}
                             disabled={!input.trim() || isThinking}
-                            className="absolute right-2 top-2 p-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg"
                         >
                             <Send className="w-4 h-4" />
                         </button>
                     </div>
-                    <div className="text-center mt-2 text-[10px] text-slate-300">
-                        Presiona Enter para enviar
-                    </div>
+                </div>
+                <div className="text-center pb-4 text-[10px] text-slate-300">
+                    Presiona Enter para enviar
                 </div>
             </div>
         </div>

@@ -1,0 +1,175 @@
+{
+    "common": {
+        "loading": "Cargando...",
+        "logout": "Cerrar Sesión",
+        "save": "Guardar",
+        "cancel": "Cancelar",
+        "back": "Volver",
+        "next": "Siguiente",
+        "error": "Error",
+        "success": "Éxito",
+        "modules": "Módulos",
+        "controlCenter": "Centro de Control",
+        "welcome": "Bienvenido al Centro de Control",
+        "selectModule": "Selecciona el módulo que deseas utilizar para potenciar tu vida con IA."
+    },
+    "journal": {
+        "title": "Bitácora Consciente",
+        "description": "Registra tus pensamientos y revisa tu evolución diaria.",
+        "newReflection": "Nueva Reflexión",
+        "empty": "Sin registros para esta fecha",
+        "focusToday": "¿En qué nos enfocamos hoy?",
+        "selectFocus": "Seleccionar Enfoque",
+        "shuffle": "Mezclar",
+        "shuffleEnd": "Ya hemos explorado todo.",
+        "saveNote": "Guardar Nota",
+        "saving": "Guardando...",
+        "backConfirmation": "¿Seguro que quieres salir? Se perderá el progreso.",
+        "placeholder": "Responde a la pregunta o cuéntame más...",
+        "voiceInstructions": "Grabar reflexión por voz",
+        "keyboardInstructions": "Shift + Enter para salto de línea • La IA analizará tu respuesta al enviar",
+        "aiInsights": "Análisis del Sherpa",
+        "recommendations": "Recomendaciones",
+        "alerts": "Llamados de Atención",
+        "workPoints": "Puntos de Trabajo",
+        "reflectionDay": "Reflexión del día",
+        "yourReflection": "Tu Reflexión",
+        "promptQuestion": "Pregunta respondida",
+        "voice": "Voz",
+        "text": "Texto",
+        "history": "Historial de Reflexiones",
+        "noEntries": "Aún no hay reflexiones guardadas.",
+        "assistant": {
+            "welcome": "Hola. Estoy aquí para acompañar tu reflexión. ¿Qué hay en tu mente?",
+            "placeholder": "Escribe tu reflexión...",
+            "error": "Error conectando con tu cerebro central...",
+            "gratitude": "Reflexionar Gratitud",
+            "pattern": "Identificar Patrones",
+            "emotion": "Procesar Emociones",
+            "growth": "Análisis de Crecimiento"
+        }
+    },
+    "finance": {
+        "title": "Módulo Financiero",
+        "nav": {
+            "dashboard": "Resumen General",
+            "balance": "Balance Patrimonial",
+            "card": "Análisis de Tarjetas",
+            "income": "Gestión de Ingresos",
+            "fixed": "Gastos Fijos",
+            "variable": "Gastos Variables",
+            "budget": "Presupuestos",
+            "goals": "Metas de Ahorro",
+            "networth": "Patrimonio",
+            "partner": "Pareja"
+        },
+        "description": "Gestiona tu economía con inteligencia artificial.",
+        "aiAudited": "Auditado por IA"
+    },
+    "challenges": {
+        "title": "Mis Desafíos",
+        "description": "Define un reto que te asuste un poco y cambie tu vida para siempre.",
+        "newMisogi": "Nuevo Misogi",
+        "backToControl": "Volver al Centro de Control",
+        "noChallenges": "No tienes desafíos activos",
+        "callToAction": "Es hora de elegir tu próxima gran montaña.",
+        "startNow": "Comenzar ahora",
+        "active": "Activo",
+        "completed": "Completado",
+        "misogiLevel": "Nivel Misogi",
+        "create": {
+            "title": "Tu Próximo Misogi",
+            "subtitle": "¿Cómo prefieres empezar tu camino?",
+            "aiOption": "Con Coaching IA",
+            "aiDescription": "Déjate guiar por una conversación motivadora para definir tu reto y roadmap.",
+            "manualOption": "Creación Manual",
+            "manualDescription": "Ya lo tienes claro. Completa los detalles tú mismo.",
+            "namePlaceholder": "Ej: Escalar el Aconcagua",
+            "imagePlaceholder": "URL Imagen de Portada (Opcional)",
+            "saveNow": "Guardar Ahora",
+            "detectedReto": "Reto Detectado"
+        },
+        "coach": {
+            "title": "Coach Misogi IA",
+            "online": "En línea",
+            "welcome": "¡Hola! Estoy aquí para ayudarte a diseñar tu próximo Misogi. Algo que te desafíe de verdad. Para empezar... si pudieras lograr algo este año que hoy te parece casi imposible, ¿qué sería?",
+            "inputPlaceholder": "Responde al coach..."
+        }
+    },
+    "routines": {
+        "title": "Forjador de Rutinas",
+        "description": "Diseña tu identidad a través de hábitos de alto rendimiento.",
+        "dashboard": {
+            "title": "Mis Rutinas",
+            "subtitle": "Gestiona y visualiza tus rutinas diarias",
+            "activeRoutines": "Rutinas Activas",
+            "totalTime": "Tiempo Total/Día",
+            "completedDays": "Días Completados",
+            "createBtn": "Crea Rutina",
+            "progress": "Progreso",
+            "viewTasks": "Ver Tareas",
+            "noRoutines": "No tienes rutinas activas. Empieza a diseñar tu identidad hoy."
+        },
+        "wizard": {
+            "title": "Diseñá tu Day Routine",
+            "subtitle": "Tu mañana deja de ser un accidente. Se convierte en un sistema para construir tu próxima versión.",
+            "mode": "MODO DISEÑO DE IDENTIDAD",
+            "steps": {
+                "intention": "Intención",
+                "blocks": "Bloques",
+                "context": "Contexto",
+                "commitment": "Compromiso"
+            },
+            "step1": {
+                "nameLabel": "Nombre de tu Day Routine",
+                "startTimeLabel": "Horario de inicio",
+                "durationLabel": "Duración Ideal",
+                "intentionLabel": "Intención Principal",
+                "intentionSub": "Una frase. Cómo querés que se sienta tu mañana cuando la estás ejecutando bien.",
+                "emotionLabel": "¿Qué querés sentir al terminar tu mañana?",
+                "identityTip": "Tu mañana es tu laboratorio de identidad. No estás solo 'haciendo cosas'. Estás programando quién sos cuando el resto del mundo se despierta.",
+                "durationTip": "Tip: empezá por una rutina que puedas sostener 14 días seguidos, aunque parezca 'simple'. Primero identidad, después intensidad."
+            },
+            "step2": {
+                "title": "Armá la secuencia de tu día",
+                "subtitle": "Pensá tu rutina como una serie de bloques cortos, cada uno con un rol claro en tu identidad.",
+                "totalDuration": "Duración total estimada",
+                "addBlock": "Agregar Bloque",
+                "noBlocks": "No se encontraron bloques agregados.",
+                "form": {
+                    "title": "Formulario Bloques",
+                    "typeLabel": "Tipo Bloque",
+                    "timeLabel": "Tiempo (Min)",
+                    "objectiveLabel": "¿Cuál es el objetivo de este bloque?",
+                    "createBtn": "Crear"
+                }
+            },
+            "step3": {
+                "locationLabel": "Ubicación",
+                "triggerLabel": "Disparador (Trigger)",
+                "rulesLabel": "Reglas No Negociables",
+                "planBLabel": "Plan B (Emergencia)",
+                "planBSub": "Versión rápida para días con poco tiempo."
+            },
+            "step4": {
+                "commitmentLabel": "Declaración de Compromiso",
+                "resistanceLabel": "Acepto que sentiré resistencia mental y la superaré."
+            }
+        },
+        "detail": {
+            "logged": "RUTINA REGISTRADA",
+            "logBtn": "REGISTRAR COMPLETADO"
+        },
+        "emotions": {
+            "calm": "En calma",
+            "focused": "Enfocado",
+            "powerful": "Poderoso",
+            "grateful": "Agradecido",
+            "creative": "Creativo"
+        }
+    },
+    "command": {
+        "title": "Command",
+        "description": "Tu mente es para tener ideas, no para almacenarlas. Vuelca todo el ruido aquí."
+    }
+}

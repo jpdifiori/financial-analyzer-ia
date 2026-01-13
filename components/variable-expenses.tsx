@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 
 type VariableExpense = {
     id: string;
@@ -15,12 +16,18 @@ type VariableExpense = {
     expense_type?: string;
 };
 
-export function VariableExpenses() {
+export function VariableExpenses({ selectedMonth, setSelectedMonth }: { selectedMonth: string, setSelectedMonth?: (month: string) => void }) {
     const [expenses, setExpenses] = useState<VariableExpense[]>([]);
+    const [viewYear, setViewYear] = useState(parseInt(selectedMonth.split('-')[0]));
+
+    // Update view year when selected month changes externally
+    useEffect(() => {
+        setViewYear(parseInt(selectedMonth.split('-')[0]));
+    }, [selectedMonth]);
     const [loading, setLoading] = useState(true);
     const [description, setDescription] = useState("");
     const [amount, setAmount] = useState("");
-    const [date, setDate] = useState("");
+    const [date, setDate] = useState(selectedMonth + '-01');
     const [category, setCategory] = useState("General");
     const [expenseType, setExpenseType] = useState("Efectivo");
 
@@ -30,14 +37,62 @@ export function VariableExpenses() {
     const [showReview, setShowReview] = useState(false);
     const [debugLog, setDebugLog] = useState<string | null>(null); // New Debug State
 
+    const [calendarMarkers, setCalendarMarkers] = useState<Record<string, { closing?: string, payment?: string }>>({});
+
     useEffect(() => {
         fetchExpenses();
-    }, []);
+        fetchCalendarMarkers();
+        setDate(selectedMonth + '-01');
+    }, [selectedMonth]);
+
+    const fetchCalendarMarkers = async () => {
+        // Fetch all analyses to find dates for various months
+        // We only need summary to get dates
+        const { data } = await supabase
+            .from("analyses")
+            .select("summary")
+            .order("created_at", { ascending: false });
+
+        if (data) {
+            const markers: Record<string, { closing?: string, payment?: string }> = {};
+
+            data.forEach((a: any) => {
+                const s = a.summary;
+                if (!s) return;
+
+                // Extract Closing Date
+                if (s.closing_date) {
+                    // closing_date format YYYY-MM-DD
+                    const [y, m, d] = s.closing_date.split('-');
+                    const key = `${y}-${m}`; // Key by YYYY-MM
+                    if (!markers[key]) markers[key] = {};
+                    markers[key].closing = d;
+                }
+
+                // Extract Payment/Due Date
+                // Usually payment_date is when user paid, which is close to due date.
+                // If we want "Vencimiento", strictly we might need it from AI.
+                // Assuming payment_date is a good proxy for now if extracted.
+                if (s.payment_date) {
+                    const [y, m, d] = s.payment_date.split('-');
+                    const key = `${y}-${m}`;
+                    if (!markers[key]) markers[key] = {};
+                    markers[key].payment = d;
+                }
+            });
+            setCalendarMarkers(markers);
+        }
+    };
 
     const fetchExpenses = async () => {
+        const startDate = `${selectedMonth}-01`;
+        const endDate = `${selectedMonth}-31`;
+
         const { data, error } = await supabase
             .from("variable_expenses")
             .select("*")
+            .gte("date", startDate)
+            .lte("date", endDate)
             .order("date", { ascending: false });
 
         if (error) console.error("Error fetching variable expenses:", error);
@@ -63,7 +118,7 @@ export function VariableExpenses() {
 
         if (error) {
             console.error("Error adding expense:", error);
-            alert("Error al guardar");
+            toast.error("Error al guardar");
         } else {
             setExpenses([data[0], ...expenses]);
             setDescription("");
@@ -71,17 +126,24 @@ export function VariableExpenses() {
             setDate("");
             setCategory("General");
             setExpenseType("Efectivo");
+            toast.success("Gasto registrado");
         }
     };
 
     const deleteExpense = async (id: string) => {
-        const { error } = await supabase
-            .from("variable_expenses")
-            .delete()
-            .eq("id", id);
+        try {
+            const { error } = await supabase
+                .from("variable_expenses")
+                .delete()
+                .eq("id", id);
 
-        if (error) console.error("Error deleting expense:", error);
-        else setExpenses(expenses.filter((e) => e.id !== id));
+            if (error) throw error;
+            setExpenses(expenses.filter((e) => e.id !== id));
+            toast.success("Gasto eliminado");
+        } catch (error: any) {
+            console.error("Error deleting expense:", error);
+            toast.error("Error al eliminar");
+        }
     };
 
     // [New Code] File Handling with Auto-Conversion
@@ -149,14 +211,14 @@ export function VariableExpenses() {
                 }));
                 setScannedItems(mappedItems);
             } else {
-                alert(`Error: ${data.error || "No se detectaron items"}`);
+                toast.error(`Error: ${data.error || "No se detectaron items"}`);
                 setShowReview(false);
             }
             setIsScanning(false);
 
         } catch (e: any) {
             console.error(e);
-            alert(`Error analizando el archivo: ${e.message}`);
+            toast.error(`Error analizando el archivo: ${e.message}`);
             setIsScanning(false);
             setShowReview(false);
         }
@@ -183,12 +245,12 @@ export function VariableExpenses() {
 
         if (error) {
             console.error("Error importing items:", error);
-            alert("Error al importar gastos.");
+            toast.error("Error al importar gastos.");
         } else {
             setExpenses([...(data || []), ...expenses]);
             setScannedItems([]);
             setShowReview(false);
-            alert("¡Gastos importados correctamente!");
+            toast.success("¡Gastos importados correctamente!");
         }
     };
 
@@ -199,76 +261,87 @@ export function VariableExpenses() {
     const totalVariable = expenses.reduce((sum, item) => sum + item.amount, 0);
 
     return (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Gastos Variables (Puntuales)</CardTitle>
-                    {/* [New Code] Upload Button */}
-                    <div className="relative">
-                        <input
-                            type="file"
-                            accept="image/*,.pdf"
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
-                            disabled={isScanning}
-                        />
-                        <Button variant="outline" disabled={isScanning}>
-                            {isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                            {isScanning ? "Analizando..." : "Escanear Ticket"}
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
-
-                    {/* Debug Log */}
-                    {debugLog && (
-                        <div className="mt-4 p-2 bg-gray-900 text-green-400 text-xs rounded overflow-auto max-h-40">
-                            <strong>Debug Info:</strong>
-                            <pre>{debugLog}</pre>
+        <div className="w-full max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700">
+            {/* Main Input Card - Aurora UI */}
+            <div className="bg-slate-950/50 border border-white/10 rounded-[32px] p-8 lg:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-xl">
+                <div className="relative z-10">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                        <div>
+                            <h3 className="text-3xl font-serif text-pink-400 italic tracking-tight flex items-center gap-3">
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-pink-400 to-rose-400">
+                                    Gastos Variables
+                                </span>
+                            </h3>
+                            <div className="flex items-center gap-3 mt-2">
+                                <p className="text-slate-400 text-sm font-mono uppercase tracking-wider">
+                                    {new Date(selectedMonth + '-02').toLocaleString('es-ES', { month: 'long', year: 'numeric' })}
+                                </p>
+                                <div className="relative">
+                                    <input
+                                        type="file"
+                                        accept="image/*,.pdf"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                        onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
+                                        disabled={isScanning}
+                                    />
+                                    <Button variant="ghost" size="sm" className="h-7 px-3 text-[10px] font-bold uppercase tracking-wider text-pink-300 hover:text-white hover:bg-pink-500/20 bg-pink-500/10 rounded-full border border-pink-500/20 transition-all" disabled={isScanning}>
+                                        {isScanning ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Plus className="mr-2 h-3 w-3" />}
+                                        {isScanning ? "Escaneando..." : "Escanear Ticket"}
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
-                    )}
+                        {/* Monthly Total Pill */}
+                        <div className="bg-slate-900/50 rounded-2xl p-5 flex flex-col items-end border border-white/10 shadow-[0_0_20px_rgba(236,72,153,0.1)] backdrop-blur-md group-hover:border-pink-500/30 transition-all">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1">Total Variables</span>
+                            <span className="text-3xl font-mono font-black text-white drop-shadow-lg">
+                                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'USD' }).format(totalVariable)}
+                            </span>
+                        </div>
+                    </div>
 
-                    {/* [New Code] Review Section */}
+                    {/* Review Section */}
                     {showReview && (
-                        <div className="mb-8 p-4 bg-orange-50 border border-orange-200 rounded-lg animate-in fade-in">
-                            <h3 className="text-lg font-bold text-orange-800 mb-4 flex items-center">
-                                <span className="bg-orange-200 p-1 rounded mr-2">🤖</span>
-                                Gastos Detectados ({scannedItems.length})
+                        <div className="mb-8 p-6 bg-slate-900/80 border border-pink-500/30 rounded-2xl animate-in fade-in zoom-in duration-300 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-pink-500 to-rose-500 animate-pulse" />
+                            <h3 className="text-xs font-black text-pink-300 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                <div className="h-2 w-2 rounded-full bg-pink-500 animate-ping" />
+                                Items Detectados ({scannedItems.length})
                             </h3>
 
                             {isScanning ? (
-                                <div className="text-center py-8 text-orange-600">
-                                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                                    <p>Leyendo tu comprobante con IA...</p>
+                                <div className="text-center py-10">
+                                    <Loader2 className="h-10 w-10 animate-spin text-pink-500 mx-auto mb-4" />
+                                    <p className="text-slate-300 font-mono text-xs tracking-widest uppercase">Procesando con IA...</p>
                                 </div>
                             ) : (
                                 <>
-                                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2 mb-4">
+                                    <div className="space-y-3 max-h-72 overflow-y-auto pr-2 mb-6 scrollbar-thin scrollbar-thumb-pink-900/50 scrollbar-track-transparent">
                                         {scannedItems.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100 text-sm">
+                                            <div key={idx} className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 hover:border-pink-500/30 transition-all group/item">
                                                 <div className="flex-1">
-                                                    <p className="font-medium text-gray-900">{item.description}</p>
-                                                    <div className="flex gap-2 text-xs text-gray-500">
-                                                        <span>{item.date}</span>
-                                                        <span className="bg-orange-100 text-orange-700 px-1 rounded">{item.category}</span>
+                                                    <p className="font-serif italic text-slate-200 text-sm group-hover/item:text-pink-300 transition-colors">{item.description}</p>
+                                                    <div className="flex gap-2 text-[10px] uppercase font-bold text-slate-500 mt-1">
+                                                        <span className="bg-black/30 px-2 py-0.5 rounded border border-white/5">{item.date}</span>
+                                                        <span className="bg-pink-500/10 text-pink-300 px-2 py-0.5 rounded border border-pink-500/20">{item.category}</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="font-bold">${item.amount.toLocaleString()}</span>
-                                                    <button onClick={() => removeScannedItem(idx)} className="text-gray-400 hover:text-red-500">
-                                                        <Trash2 className="h-3 w-3" />
+                                                <div className="flex items-center gap-4">
+                                                    <span className="font-mono font-bold text-white">${item.amount.toLocaleString()}</span>
+                                                    <button onClick={() => removeScannedItem(idx)} className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors">
+                                                        <Trash2 className="h-4 w-4" />
                                                     </button>
                                                 </div>
                                             </div>
                                         ))}
-                                        {scannedItems.length === 0 && <p className="text-sm text-center text-gray-500">No se encontraron items válidos.</p>}
+                                        {scannedItems.length === 0 && <p className="text-xs text-center py-6 text-slate-500 font-mono uppercase tracking-widest">No hay items válidos.</p>}
                                     </div>
-                                    <div className="flex justify-end gap-2">
-                                        <Button variant="ghost" size="sm" onClick={() => { setShowReview(false); setScannedItems([]); }}>
-                                            Cancelar
+                                    <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                                        <Button variant="ghost" onClick={() => { setShowReview(false); setScannedItems([]); }} className="text-slate-400 text-xs font-bold hover:text-white hover:bg-white/10">
+                                            CANCELAR
                                         </Button>
-                                        <Button size="sm" onClick={confirmImport} disabled={scannedItems.length === 0} className="bg-orange-600 hover:bg-orange-700 text-white">
-                                            Confirmar e Importar
+                                        <Button size="sm" onClick={confirmImport} disabled={scannedItems.length === 0} className="bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.4)] text-xs font-bold px-6 tracking-wider border border-white/10">
+                                            CONFIRMAR
                                         </Button>
                                     </div>
                                 </>
@@ -276,96 +349,190 @@ export function VariableExpenses() {
                         </div>
                     )}
 
-                    <form onSubmit={addExpense} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-6 pt-4 border-t">
-                        <input
-                            placeholder="Descripción (ej. Cena)"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            className="px-3 py-2 border rounded-md"
-                            required
-                        />
-                        <input
-                            type="number"
-                            placeholder="Monto"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="px-3 py-2 border rounded-md"
-                            required
-                        />
-                        <input
-                            type="date"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="px-3 py-2 border rounded-md"
-                            required
-                        />
-                        <select
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                            className="px-3 py-2 border rounded-md"
-                        >
-                            <option value="General">General</option>
-                            <option value="Supermercado">Supermercado</option>
-                            <option value="Comida">Comida</option>
-                            <option value="Servicios">Servicios</option>
-                            <option value="Transporte">Transporte</option>
-                            <option value="Entretenimiento">Entretenimiento</option>
-                            <option value="Salud">Salud</option>
-                            <option value="Educación">Educación</option>
-                            <option value="Ropa">Ropa</option>
-                            <option value="Hogar">Hogar</option>
-                            <option value="Otros">Otros</option>
-                        </select>
-                        <select
-                            value={expenseType}
-                            onChange={(e) => setExpenseType(e.target.value)}
-                            className="px-3 py-2 border rounded-md"
-                        >
-                            <option value="Efectivo">Efectivo</option>
-                            <option value="Débito">Débito</option>
-                            <option value="Transferencia">Transferencia</option>
-                            <option value="QR">QR / Billetera Virtual</option>
-                        </select>
-                        <Button type="submit" className="w-full">
-                            <Plus className="mr-2 h-4 w-4" /> Agregar Manual
-                        </Button>
-                    </form>
-
-                    {loading ? (
-                        <div className="text-center p-4"><Loader2 className="animate-spin h-6 w-6 mx-auto" /></div>
-                    ) : (
-                        <div>
-                            <div className="bg-slate-100 p-4 rounded-lg mb-4 flex justify-between items-center font-bold">
-                                <span>Total Variables:</span>
-                                <span className="text-lg">${totalVariable.toLocaleString()}</span>
-                            </div>
-                            <div className="space-y-2">
-                                {expenses.map((expense) => (
-                                    <div key={expense.id} className="flex justify-between items-center p-3 bg-white border rounded-md shadow-sm">
-                                        <div>
-                                            <p className="font-medium">{expense.description}</p>
-                                            <div className="flex gap-2 text-xs text-gray-500 mt-1">
-                                                <span>{expense.date}</span>
-                                                <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700">{expense.category || "General"}</span>
-                                                {expense.expense_type && (
-                                                    <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">{expense.expense_type}</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="font-bold">${expense.amount.toLocaleString()}</span>
-                                            <button onClick={() => deleteExpense(expense.id)} className="text-red-500 hover:text-red-700">
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                                {expenses.length === 0 && <p className="text-center text-gray-500 text-sm">No hay gastos variables registrados.</p>}
-                            </div>
+                    <form onSubmit={addExpense} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                        <div className="md:col-span-2 space-y-2">
+                            <input
+                                placeholder="Descripción (ej: Cena con amigos)"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-600 focus:border-pink-500/50 focus:bg-white/10 transition-all font-serif italic outline-none"
+                                required
+                            />
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                        <div className="space-y-2">
+                            <input
+                                type="number"
+                                placeholder="Monto"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-white font-mono font-bold placeholder:text-slate-600 focus:border-pink-500/50 focus:bg-white/10 transition-all outline-none"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-slate-300 font-mono placeholder:text-slate-600 focus:border-pink-500/50 focus:bg-white/10 transition-all outline-none"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <select
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-slate-300 font-mono cursor-pointer focus:border-pink-500/50 focus:bg-white/10 transition-all outline-none appearance-none"
+                            >
+                                <option value="General" className="bg-slate-900">General</option>
+                                <option value="Supermercado" className="bg-slate-900">Supermercado</option>
+                                <option value="Comida" className="bg-slate-900">Comida</option>
+                                <option value="Servicios" className="bg-slate-900">Servicios</option>
+                                <option value="Transporte" className="bg-slate-900">Transporte</option>
+                                <option value="Entretenimiento" className="bg-slate-900">Entretenimiento</option>
+                                <option value="Salud" className="bg-slate-900">Salud</option>
+                                <option value="Educación" className="bg-slate-900">Educación</option>
+                                <option value="Ropa" className="bg-slate-900">Ropa</option>
+                                <option value="Hogar" className="bg-slate-900">Hogar</option>
+                                <option value="Otros" className="bg-slate-900">Otros</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <select
+                                value={expenseType}
+                                onChange={(e) => setExpenseType(e.target.value)}
+                                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-slate-300 font-mono cursor-pointer focus:border-pink-500/50 focus:bg-white/10 transition-all outline-none appearance-none"
+                            >
+                                <option value="Efectivo" className="bg-slate-900">Efectivo</option>
+                                <option value="Débito" className="bg-slate-900">Débito</option>
+                                <option value="Transferencia" className="bg-slate-900">Transferencia</option>
+                                <option value="QR" className="bg-slate-900">QR / Billetera</option>
+                            </select>
+                        </div>
+
+                        <div className="md:col-span-6 flex justify-end pt-4 border-t border-white/5 mt-2">
+                            <Button type="submit" className="w-full md:w-auto bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl px-8 py-6 shadow-[0_0_20px_rgba(236,72,153,0.3)] transition-transform hover:scale-[1.02] uppercase font-black tracking-widest text-xs border border-white/10">
+                                <Plus className="mr-2 h-4 w-4" /> Agregar Gasto
+                            </Button>
+                        </div>
+                    </form>
+                </div>
+                {/* Aurora Blob */}
+                <div className="absolute -top-24 -right-24 h-64 w-64 bg-pink-500/20 rounded-full blur-[100px] pointer-events-none group-hover:bg-pink-500/30 transition-all duration-700" />
+                <div className="absolute -bottom-24 -left-24 h-64 w-64 bg-purple-500/20 rounded-full blur-[100px] pointer-events-none group-hover:bg-purple-500/30 transition-all duration-700" />
+            </div>
+
+            {/* Horizontal Annual Calendar */}
+            <div className="relative">
+                <div className="flex items-center justify-between mb-6 px-2">
+                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                        Calendario <span className="text-pink-500 text-lg">•</span> {viewYear}
+                    </h4>
+                    <div className="flex items-center gap-2 bg-slate-900/50 rounded-lg p-1 border border-white/5">
+                        <button
+                            onClick={() => setViewYear(prev => prev - 1)}
+                            className="p-1.5 text-slate-500 hover:text-white hover:bg-white/10 rounded-md transition-all"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="font-mono font-bold text-slate-300 text-sm px-2">{viewYear}</span>
+                        <button
+                            onClick={() => setViewYear(prev => prev + 1)}
+                            className="p-1.5 text-slate-500 hover:text-white hover:bg-white/10 rounded-md transition-all"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-slate-950/30 border-y border-white/5 backdrop-blur-sm p-4 mb-8 overflow-x-auto scrollbar-hide -mx-4 md:mx-0 md:rounded-2xl md:border">
+                    <div className="flex items-center gap-4 min-w-max px-2">
+                        {Array.from({ length: 12 }, (_, i) => {
+                            const monthNum = i + 1;
+                            const monthStr = `${viewYear}-${monthNum.toString().padStart(2, '0')}`;
+                            const isSelected = selectedMonth === monthStr;
+
+                            // Check for Card Dates
+                            const marker = calendarMarkers[monthStr];
+
+                            return (
+                                <button
+                                    key={monthNum}
+                                    onClick={() => setSelectedMonth?.(monthStr)}
+                                    className={`
+                                        relative group flex flex-col items-center justify-center min-w-[70px] h-[100px] rounded-2xl border transition-all duration-300
+                                        ${isSelected
+                                            ? 'bg-gradient-to-br from-pink-500/20 to-rose-500/20 border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.2)]'
+                                            : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'
+                                        }
+                                    `}
+                                >
+                                    <span className={`text-[9px] uppercase font-black tracking-widest mb-1 ${isSelected ? 'text-pink-300' : 'text-slate-500'}`}>
+                                        {new Date(2024, i, 1).toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}
+                                    </span>
+                                    <span className={`text-lg font-mono font-bold ${isSelected ? 'text-white' : 'text-slate-600 group-hover:text-slate-400'}`}>
+                                        {monthNum.toString().padStart(2, '0')}
+                                    </span>
+
+                                    {/* Markers */}
+                                    <div className="mt-2 text-[8px] font-mono flex flex-col items-center gap-1 w-full px-1">
+                                        {marker?.closing && (
+                                            <div className="w-full bg-pink-500/20 text-pink-300 rounded px-1 py-0.5 border border-pink-500/30 text-center truncate">
+                                                Cie: {marker.closing}
+                                            </div>
+                                        )}
+                                        {marker?.payment && (
+                                            <div className="w-full bg-blue-500/20 text-blue-300 rounded px-1 py-0.5 border border-blue-500/30 text-center truncate">
+                                                Ven: {marker.payment}
+                                            </div>
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* List Section */}
+            <div className="space-y-4">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] pl-4">Historial de Gastos</h4>
+
+                {loading ? (
+                    <div className="text-center p-12"><Loader2 className="animate-spin h-8 w-8 text-pink-500 mx-auto" /></div>
+                ) : (
+                    <div className="grid gap-3">
+                        {expenses.map((expense) => (
+                            <div key={expense.id} className="group flex justify-between items-center p-5 bg-slate-900/40 border border-white/5 rounded-[24px] hover:bg-slate-900/60 hover:border-white/20 transition-all duration-300 backdrop-blur-md relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1 h-full bg-pink-500/0 group-hover:bg-pink-500 transition-all duration-300" />
+                                <div>
+                                    <p className="font-serif italic text-lg text-slate-200 group-hover:text-pink-300 transition-colors mb-1">{expense.description}</p>
+                                    <div className="flex flex-wrap gap-2 text-[10px] uppercase font-bold text-slate-500">
+                                        <span className="bg-black/20 px-2 py-1 rounded-lg border border-white/5">{expense.date}</span>
+                                        <span className="bg-pink-500/10 text-pink-400 px-2 py-1 rounded-lg border border-pink-500/20">{expense.category || "General"}</span>
+                                        {expense.expense_type && (
+                                            <span className="bg-blue-500/10 text-blue-300 px-2 py-1 rounded-lg border border-blue-500/20">{expense.expense_type}</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-6">
+                                    <span className="font-mono font-bold text-xl text-white drop-shadow-md">
+                                        -${expense.amount.toLocaleString()}
+                                    </span>
+                                    <button onClick={() => deleteExpense(expense.id)} className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-full transition-all opacity-0 group-hover:opacity-100">
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                        {expenses.length === 0 && (
+                            <div className="bg-slate-900/40 rounded-[24px] p-12 text-center border border-white/5 border-dashed">
+                                <p className="text-slate-500 font-mono text-sm">No hay gastos variables en este período.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface UploadZoneProps {
     onFileSelect: (file: File) => void;
@@ -26,7 +27,7 @@ export function UploadZone({
         if (files && files.length > 0 && files[0].type === "application/pdf") {
             onFileSelect(files[0]);
         } else if (files && files.length > 0) {
-            alert("Solo archivos PDF.");
+            toast.error("Solo archivos PDF.");
         }
     };
 

@@ -16,6 +16,13 @@ const config: Config = {
             colors: {
                 primary: "#4F46E5",
                 secondary: "#10B981",
+                "clean-white": "#FFFFFF",
+                "clean-pearl": "#FAFAFA",
+                "electric-orange": "#FF5F00",
+                "cobalt-blue": "#007AFF",
+                "vibrant-magenta": "#FF0055",
+                "electric-violet": "#8A2BE2",
+                "charcoal-grey": "#18181B",
             }
         },
     },

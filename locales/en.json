@@ -1,0 +1,175 @@
+{
+    "common": {
+        "loading": "Loading...",
+        "logout": "Logout",
+        "save": "Save",
+        "cancel": "Cancel",
+        "back": "Back",
+        "next": "Next",
+        "error": "Error",
+        "success": "Success",
+        "modules": "Modules",
+        "controlCenter": "Control Center",
+        "welcome": "Welcome to the Control Center",
+        "selectModule": "Select the module you want to use to empower your life with AI."
+    },
+    "journal": {
+        "title": "Journal",
+        "description": "Record your thoughts and review your daily evolution.",
+        "newReflection": "New Reflection",
+        "empty": "No entries for this date",
+        "focusToday": "What should we focus on today?",
+        "selectFocus": "Select Focus",
+        "shuffle": "Shuffle",
+        "shuffleEnd": "We've already explored everything.",
+        "saveNote": "Save Note",
+        "saving": "Saving...",
+        "backConfirmation": "Are you sure you want to leave? Progress will be lost.",
+        "placeholder": "Answer the question or tell me more...",
+        "voiceInstructions": "Record voice reflection",
+        "keyboardInstructions": "Shift + Enter for new line • AI will analyze your response on send",
+        "aiInsights": "Sherpa Analysis",
+        "recommendations": "Recommendations",
+        "alerts": "Attention Points",
+        "workPoints": "Work Points",
+        "reflectionDay": "Reflection of the day",
+        "yourReflection": "Your Reflection",
+        "promptQuestion": "Question answered",
+        "voice": "Voice",
+        "text": "Text",
+        "history": "Reflection History",
+        "noEntries": "No saved reflections yet.",
+        "assistant": {
+            "welcome": "Hello. I'm here to accompany your reflection. What's on your mind?",
+            "placeholder": "Write your reflection...",
+            "error": "Error connecting with your central brain...",
+            "gratitude": "Reflect on Gratitude",
+            "pattern": "Identify Patterns",
+            "emotion": "Process Emotions",
+            "growth": "Growth Analysis"
+        }
+    },
+    "finance": {
+        "title": "Finance Module",
+        "nav": {
+            "dashboard": "Overview",
+            "balance": "Balance Sheet",
+            "card": "Card Analysis",
+            "income": "Income Management",
+            "fixed": "Fixed Expenses",
+            "variable": "Variable Expenses",
+            "budget": "Budgets",
+            "goals": "Savings Goals",
+            "networth": "Net Worth",
+            "partner": "Partner"
+        },
+        "description": "Manage your economy with artificial intelligence.",
+        "aiAudited": "AI Audited"
+    },
+    "challenges": {
+        "title": "My Challenges",
+        "description": "Define a challenge that scares you a little and changes your life forever.",
+        "newMisogi": "New Misogi",
+        "backToControl": "Back to Control Center",
+        "noChallenges": "You have no active challenges",
+        "callToAction": "It's time to choose your next big mountain.",
+        "startNow": "Start Now",
+        "active": "Active",
+        "completed": "Completed",
+        "misogiLevel": "Misogi Level",
+        "create": {
+            "title": "Your Next Misogi",
+            "subtitle": "How do you prefer to start your journey?",
+            "aiOption": "With AI Coaching",
+            "aiDescription": "Let yourself be guided by a motivating conversation to define your challenge and roadmap.",
+            "manualOption": "Manual Creation",
+            "manualDescription": "You already have it clear. Complete the details yourself.",
+            "namePlaceholder": "Ex: Climb Aconcagua",
+            "imagePlaceholder": "Cover Image URL (Optional)",
+            "saveNow": "Save Now",
+            "detectedReto": "Detected Challenge"
+        },
+        "coach": {
+            "title": "AI Misogi Coach",
+            "online": "Online",
+            "welcome": "Hello! I'm here to help you design your next Misogi. Something that truly challenges you. To start... if you could achieve something this year that seems almost impossible today, what would it be?",
+            "inputPlaceholder": "Answer the coach..."
+        }
+    },
+    "routines": {
+        "title": "Routine Forge",
+        "description": "Design your identity through high-performance habits.",
+        "dashboard": {
+            "title": "My Routines",
+            "subtitle": "Manage and visualize your daily routines",
+            "activeRoutines": "Active Routines",
+            "totalTime": "Total Time/Day",
+            "completedDays": "Completed Days",
+            "createBtn": "Create Routine",
+            "progress": "Progress",
+            "viewTasks": "View Tasks",
+            "noRoutines": "You have no active routines. Start designing your identity today."
+        },
+        "wizard": {
+            "title": "Design your Day Routine",
+            "subtitle": "Your morning stops being an accident. It becomes a system to build your next version.",
+            "mode": "IDENTITY DESIGN MODE",
+            "steps": {
+                "intention": "Intention",
+                "blocks": "Blocks",
+                "context": "Context",
+                "commitment": "Commitment"
+            },
+            "step1": {
+                "nameLabel": "Name of your Day Routine",
+                "startTimeLabel": "Start time",
+                "durationLabel": "Ideal Duration",
+                "intentionLabel": "Main Intention",
+                "intentionSub": "A phrase. How you want your morning to feel when you're executing it well.",
+                "emotionLabel": "What do you want to feel at the end of your morning?",
+                "identityTip": "Your morning is your identity laboratory. You're not just 'doing things'. You're programming who you are when the rest of the world wakes up.",
+                "durationTip": "Tip: start with a routine you can sustain for 14 days in a row, even if it seems 'simple'. First identity, then intensity."
+            },
+            "step2": {
+                "title": "Build your day's sequence",
+                "subtitle": "Think of your routine as a series of short blocks, each with a clear role in your identity.",
+                "totalDuration": "Estimated total duration",
+                "addBlock": "Add Block",
+                "noBlocks": "No blocks found.",
+                "form": {
+                    "title": "Blocks Form",
+                    "typeLabel": "Block Type",
+                    "timeLabel": "Time (Min)",
+                    "objectiveLabel": "What's the goal of this block?",
+                    "createBtn": "Create"
+                }
+            },
+            "step3": {
+                "locationLabel": "Location",
+                "triggerLabel": "Trigger",
+                "rulesLabel": "Non-Negotiable Rules",
+                "planBLabel": "Plan B (Emergency)",
+                "planBSub": "Quick version for days with little time."
+            },
+            "step4": {
+                "commitmentLabel": "Commitment Statement",
+                "resistanceLabel": "I accept I will feel mental resistance and I will overcome it."
+            }
+        },
+        "detail": {
+            "logged": "ROUTINE LOGGED",
+            "logBtn": "LOG COMPLETION"
+        },
+        "emotions": {
+            "calm": "Calm",
+            "focused": "Focused",
+            "powerful": "Powerful",
+            "grateful": "Grateful",
+            "creative": "Creative"
+        }
+    },
+    "command": {
+        "title": "Command",
+        "description": "Your mind is for having ideas, not holding them. Dump the noise here."
+    }
+}
